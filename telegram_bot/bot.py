@@ -29,6 +29,7 @@ load_dotenv(os.path.join(PARENT_DIR, ".env"))
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 MAP_WEB_URL = os.getenv("MAP_WEB_URL", "http://localhost:8080/map")
 
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
@@ -634,7 +635,7 @@ If user asks about a terminated clinic, immediately warn them."""
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=GEMINI_MODEL,
             contents=f"{compact_system_prompt}\n\nUser Question: {user_text}",
         )
         await update.message.reply_text(response.text)
