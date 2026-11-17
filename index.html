@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Content:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', 'Content', sans-serif; background: #0e1621; color: #fff; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    body { font-family: 'Inter', 'Content', sans-serif; background: #0e1621; color: #fff; height: 100vh; display: flex; flex-direction: column; overflow: hidden; position: relative; }
     header { background: #17212b; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #232e3c; flex-wrap: wrap; gap: 10px; z-index: 1000; }
     header h1 { font-size: 1.1rem; color: #2ea6ff; display: flex; align-items: center; gap: 8px; }
     .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -21,8 +21,42 @@
     .badge { padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
     .badge-active { background: rgba(46, 204, 113, 0.2); color: #2ecc71; border: 1px solid #2ecc71; }
     .badge-term { background: rgba(231, 76, 60, 0.2); color: #e74c3c; border: 1px solid #e74c3c; }
-    .user-banner { background: #2ea6ff; color: #fff; padding: 6px 16px; font-size: 0.82rem; font-weight: 600; text-align: center; display: none; }
+    .user-banner { background: #2ea6ff; color: #fff; padding: 7px 16px; font-size: 0.84rem; font-weight: 600; text-align: center; display: none; }
     #map { flex: 1; width: 100%; height: 100%; }
+
+    /* Noticeable Pulsating Beacon for User Location */
+    .pulsing-beacon { position: relative; width: 28px; height: 28px; }
+    .beacon-dot {
+      width: 18px; height: 18px; background: #0088ff; border-radius: 50%;
+      border: 3px solid #ffffff; box-shadow: 0 0 12px rgba(0, 136, 255, 0.9);
+      position: absolute; top: 5px; left: 5px; z-index: 2;
+    }
+    .beacon-pulse {
+      width: 52px; height: 52px; background: rgba(0, 136, 255, 0.5);
+      border-radius: 50%; position: absolute; top: -12px; left: -12px;
+      animation: radar-pulse 2s infinite ease-out; z-index: 1;
+    }
+    @keyframes radar-pulse {
+      0% { transform: scale(0.3); opacity: 1; }
+      100% { transform: scale(1.8); opacity: 0; }
+    }
+    .user-tooltip {
+      background: #0088ff !important; color: #fff !important; font-weight: bold !important;
+      font-size: 0.82rem !important; border: none !important; border-radius: 6px !important;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4) !important; padding: 4px 8px !important;
+    }
+    .user-tooltip::before { border-top-color: #0088ff !important; }
+
+    /* Floating Update My Location Button */
+    .btn-my-loc {
+      position: absolute; bottom: 30px; right: 20px; z-index: 1000;
+      background: #17212b; border: 2px solid #2ea6ff; color: #fff;
+      padding: 10px 18px; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      display: flex; align-items: center; gap: 8px; font-size: 0.88rem; font-weight: 600;
+      cursor: pointer; transition: 0.2s;
+    }
+    .btn-my-loc:hover { background: #2ea6ff; color: #fff; transform: translateY(-2px); }
+
     .custom-popup .leaflet-popup-content-wrapper { background: #17212b; color: #fff; border-radius: 10px; border: 1px solid #232e3c; }
     .custom-popup .leaflet-popup-tip { background: #17212b; }
     .popup-title { font-size: 1rem; font-weight: bold; margin-bottom: 5px; color: #2ea6ff; }
@@ -31,20 +65,17 @@
     .term-box a { color: #2ea6ff; text-decoration: underline; }
     .btn-nav { display: inline-block; margin-top: 8px; padding: 6px 12px; background: #2ea6ff; color: #fff; text-decoration: none; border-radius: 6px; font-size: 0.82rem; font-weight: 600; }
 
-    /* Desktop and Laptop Widescreen Enhancements */
     @media (min-width: 900px) {
       header { padding: 14px 28px; }
       header h1 { font-size: 1.25rem; }
       .search-input { width: 300px; font-size: 0.95rem; }
       .search-input:focus { width: 360px; }
       .filter-btn { padding: 8px 16px; font-size: 0.9rem; }
-      .popup-title { font-size: 1.1rem; }
-      .popup-meta { font-size: 0.92rem; }
     }
   </style>
 </head>
 <body>
-  <div id="user-banner" class="user-banner">📍 បង្ហាញគ្លីនិកជិតទីតាំងរបស់អ្នក / Showing partner clinics near your Telegram location</div>
+  <div id="user-banner" class="user-banner">📍 បង្ហាញគ្លីនិកជិតទីតាំងរបស់អ្នក / Showing partner clinics near your location</div>
   <header>
     <h1>🏥 NSSF Partner Facilities 🇰🇭</h1>
     <div class="controls">
@@ -58,17 +89,21 @@
   </header>
   <div id="map"></div>
 
+  <!-- Floating Button to Update/Detect Live Location in Browser -->
+  <button id="btn-update-loc" class="btn-my-loc">
+    🎯 ធ្វើបច្ចុប្បន្នភាពទីតាំង (Update My Location)
+  </button>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script>
     // 1. Read URL Parameters for Location (from Telegram)
     const urlParams = new URLSearchParams(window.location.search);
-    const urlLat = parseFloat(urlParams.get('lat'));
-    const urlLng = parseFloat(urlParams.get('lng'));
-    const hasUserLoc = !isNaN(urlLat) && !isNaN(urlLng);
+    let userLat = parseFloat(urlParams.get('lat'));
+    let userLng = parseFloat(urlParams.get('lng'));
+    let hasUserLoc = !isNaN(userLat) && !isNaN(userLng);
 
-    // Initial center: User's Telegram coordinates or default Cambodia center
-    const defaultCenter = hasUserLoc ? [urlLat, urlLng] : [11.5564, 104.9282];
+    const defaultCenter = hasUserLoc ? [userLat, userLng] : [11.5564, 104.9282];
     const defaultZoom = hasUserLoc ? 14 : 8;
 
     const map = L.map('map').setView(defaultCenter, defaultZoom);
@@ -78,27 +113,73 @@
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    if (hasUserLoc) {
+    let userMarker = null;
+
+    function renderUserLocation(lat, lng) {
+      userLat = lat;
+      userLng = lng;
+      hasUserLoc = true;
+
       document.getElementById('user-banner').style.display = 'block';
 
-      // Blue marker for User's live location from Telegram
-      const userIcon = new L.Icon({
-        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-        iconSize: [28, 45],
-        iconAnchor: [14, 45],
-        popupAnchor: [1, -38],
-        shadowSize: [41, 41]
+      if (userMarker) {
+        map.removeLayer(userMarker);
+      }
+
+      const beaconIcon = L.divIcon({
+        className: 'pulsing-beacon',
+        html: '<div class="beacon-pulse"></div><div class="beacon-dot"></div>',
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
       });
 
-      const userMarker = L.marker([urlLat, urlLng], { icon: userIcon, zIndexOffset: 1000 }).addTo(map);
+      userMarker = L.marker([lat, lng], { icon: beaconIcon, zIndexOffset: 2000 }).addTo(map);
+      userMarker.bindTooltip("📍 អ្នកនៅទីនេះ (YOU ARE HERE)", {
+        permanent: true,
+        direction: "top",
+        offset: [0, -14],
+        className: "user-tooltip"
+      }).openTooltip();
+
       userMarker.bindPopup(`
         <div class="custom-popup">
           <div class="popup-title" style="color: #2ea6ff;">📍 ទីតាំងរបស់អ្នក / Your Location</div>
-          <div class="popup-meta">បានទទួលពី Telegram (No browser permission needed)</div>
+          <div class="popup-meta">កូអរដោនេ៖ ${lat.toFixed(5)}, ${lng.toFixed(5)}</div>
         </div>
-      `).openPopup();
+      `);
+
+      map.flyTo([lat, lng], 14, { animate: true, duration: 1.2 });
+      refreshClinicPopups();
     }
+
+    if (hasUserLoc) {
+      renderUserLocation(userLat, userLng);
+    }
+
+    // Live update button handler
+    document.getElementById('btn-update-loc').addEventListener('click', function() {
+      const btn = this;
+      btn.innerText = '⏳ កំពុងកំណត់ទីតាំង...';
+      if (!navigator.geolocation) {
+        alert('Geolocation is not supported by your browser.');
+        btn.innerHTML = '🎯 ធ្វើបច្ចុប្បន្នភាពទីតាំង (Update My Location)';
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        function(pos) {
+          renderUserLocation(pos.coords.latitude, pos.coords.longitude);
+          btn.innerHTML = '✅ បានធ្វើបច្ចុប្បន្នភាព (Updated)';
+          setTimeout(() => {
+            btn.innerHTML = '🎯 ធ្វើបច្ចុប្បន្នភាពទីតាំង (Update My Location)';
+          }, 3000);
+        },
+        function(err) {
+          alert('Could not retrieve location: ' + err.message);
+          btn.innerHTML = '🎯 ធ្វើបច្ចុប្បន្នភាពទីតាំង (Update My Location)';
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    });
 
     const greenIcon = new L.Icon({
       iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
@@ -141,6 +222,42 @@
         if (coreEn.length > 3 && text.toLowerCase().includes(coreEn.toLowerCase())) return item;
       }
       return null;
+    }
+
+    function refreshClinicPopups() {
+      allMarkers.forEach(m => {
+        const p = m.featureData;
+        let distText = '';
+        if (hasUserLoc) {
+          const dist = haversineKm(userLat, userLng, p.lat, p.lng);
+          distText = ` (${dist.toFixed(1)} km ពីអ្នក)`;
+        }
+
+        let termHtml = '';
+        if (p.isTerm && p.termNotice) {
+          termHtml = `
+            <div class="term-box">
+              ⚠️ <strong>កិច្ចព្រមព្រៀងត្រូវបានបញ្ចប់/ផ្អាក!</strong><br>
+              ថ្ងៃទី៖ ${p.termNotice.date ? p.termNotice.date.substring(0, 10) : 'N/A'}<br>
+              ${p.termNotice.url ? `<a href="${p.termNotice.url}" target="_blank">🔗 មើលសេចក្តីជូនដំណឹងផ្លូវការ</a>` : ''}
+            </div>
+          `;
+        }
+
+        const popupContent = `
+          <div class="custom-popup">
+            <div class="popup-title">${p.nameKm}</div>
+            <div class="popup-meta">
+              <div><strong>EN:</strong> ${p.nameEn}</div>
+              <div><strong>📍 ទីតាំង៖</strong> ${p.district}, ${p.province}${distText}</div>
+              <div><strong>📞 ទូរស័ព្ទ៖</strong> ${p.phone}</div>
+              ${termHtml}
+              <a class="btn-nav" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank">🗺 បើកមើលផ្លូវ (Google Maps)</a>
+            </div>
+          </div>
+        `;
+        m.bindPopup(popupContent);
+      });
     }
 
     async function loadData() {
@@ -190,52 +307,29 @@
 
         if (isTerm) termCount++; else activeCount++;
 
-        let distText = '';
-        if (hasUserLoc) {
-          const dist = haversineKm(urlLat, urlLng, lat, lng);
-          distText = ` (${dist.toFixed(1)} km)`;
-        }
-
         const icon = isTerm ? redIcon : greenIcon;
         const marker = L.marker([lat, lng], { icon });
 
-        let termHtml = '';
-        if (isTerm) {
-          termHtml = `
-            <div class="term-box">
-              ⚠️ <strong>កិច្ចព្រមព្រៀងត្រូវបានបញ្ចប់/ផ្អាក!</strong><br>
-              ថ្ងៃទី៖ ${termNotice.date ? termNotice.date.substring(0, 10) : 'N/A'}<br>
-              ${termNotice.url ? `<a href="${termNotice.url}" target="_blank">🔗 មើលសេចក្តីជូនដំណឹងផ្លូវការ</a>` : ''}
-            </div>
-          `;
-        }
-
-        const popupContent = `
-          <div class="custom-popup">
-            <div class="popup-title">${nameKm}</div>
-            <div class="popup-meta">
-              <div><strong>EN:</strong> ${nameEn}</div>
-              <div><strong>📍 ទីតាំង៖</strong> ${district}, ${province}${distText}</div>
-              <div><strong>📞 ទូរស័ព្ទ៖</strong> ${phone}</div>
-              ${termHtml}
-              <a class="btn-nav" href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank">🗺 បើកមើលផ្លូវ (Google Maps)</a>
-            </div>
-          </div>
-        `;
-
-        marker.bindPopup(popupContent);
         marker.featureData = {
           nameKm,
           nameEn,
           district,
           province,
+          phone,
+          lat,
+          lng,
           isTerm,
+          termNotice,
         };
+
+        markersCluster.addLayer(marker);
         allMarkers.push(marker);
       });
 
+      map.addLayer(markersCluster);
       document.getElementById('active-count').innerText = `${activeCount} Active`;
       document.getElementById('term-count').innerText = `${termCount} Terminated`;
+      refreshClinicPopups();
       applyFilters();
     }
 

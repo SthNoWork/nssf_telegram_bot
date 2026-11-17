@@ -19,3 +19,7 @@ ENV/
 .idea/
 .DS_Store
 Thumbs.db
+
+# User Runtime Data
+telegram_bot/data/user_settings.json
+telegram_bot/data/reports.json
