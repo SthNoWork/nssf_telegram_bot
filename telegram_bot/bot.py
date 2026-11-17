@@ -36,16 +36,39 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL")
 MAP_WEB_URL = os.getenv("MAP_WEB_URL", "https://sthnowork.github.io/nssf_telegram_bot/")
 
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 
+def get_openrouter_candidate_models() -> list[str]:
+    """Returns prioritized candidate models for OpenRouter fallback."""
+    models: list[str] = []
+    if OPENROUTER_MODEL:
+        for m in OPENROUTER_MODEL.split(","):
+            m = m.strip()
+            if m and m not in models:
+                models.append(m)
+    defaults = [
+        "google/gemini-2.0-flash-001",
+        "meta-llama/llama-3.3-70b-instruct",
+        "deepseek/deepseek-chat",
+        "mistralai/mistral-small-24b-instruct-2501",
+        "qwen/qwen-2.5-72b-instruct",
+        "openrouter/auto",
+    ]
+    for d in defaults:
+        if d not in models:
+            models.append(d)
+    return models
+
+
 def call_openrouter_sync(system_prompt: str, user_text: str) -> str | None:
-    """Calls OpenRouter chat completions endpoint synchronously with timeout."""
+    """Calls OpenRouter chat completions with multi-model fallback."""
     if not OPENROUTER_API_KEY:
         return None
+
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY.strip()}",
@@ -54,29 +77,64 @@ def call_openrouter_sync(system_prompt: str, user_text: str) -> str | None:
         "X-Title": "NSSF Telegram Bot",
         "User-Agent": "NSSFBot/1.0",
     }
+    candidate_models = get_openrouter_candidate_models()
+
+    # 1. First attempt: OpenRouter native server-side fallback array
     payload = {
-        "model": OPENROUTER_MODEL,
+        "models": candidate_models,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_text},
         ],
         "max_tokens": 450,
     }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers=headers,
-        method="POST",
-    )
     try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
         with urllib.request.urlopen(req, timeout=12.0) as response:
             res_data = json.loads(response.read().decode("utf-8"))
             choices = res_data.get("choices", [])
             if choices:
-                return choices[0].get("message", {}).get("content", "").strip()
+                content = choices[0].get("message", {}).get("content", "").strip()
+                if content:
+                    return content
     except Exception as e:
-        print(f"OpenRouter Error: {e}")
-        return None
+        print(f"OpenRouter multi-model payload attempt failed: {e}. Trying individual candidate models...")
+
+    # 2. Secondary fallback: Iterate candidate models individually
+    for model_name in candidate_models:
+        try:
+            single_payload = {
+                "model": model_name,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_text},
+                ],
+                "max_tokens": 450,
+            }
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(single_payload).encode("utf-8"),
+                headers=headers,
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10.0) as response:
+                res_data = json.loads(response.read().decode("utf-8"))
+                choices = res_data.get("choices", [])
+                if choices:
+                    content = choices[0].get("message", {}).get("content", "").strip()
+                    if content:
+                        print(f"OpenRouter succeeded with fallback model: {model_name}")
+                        return content
+        except Exception as e:
+            print(f"OpenRouter model '{model_name}' attempt failed: {e}")
+            continue
+
+    return None
 
 
 def resolve_file_path(filename, fallbacks=None):
@@ -966,7 +1024,8 @@ def main():
     print(f"⚠️ Loaded {len(terminations)} termination notices from {TERMINATIONS_FILE}")
     print(f"📋 Loaded {len(guidelines)} NSSF guideline topics from {GUIDELINES_FILE}")
     print(f"🗺 Map Web URL: {MAP_WEB_URL}")
-    print(f"⚡ OpenRouter Provider: {'Enabled (' + OPENROUTER_MODEL + ')' if OPENROUTER_API_KEY else 'Disabled (Using Gemini direct)'}")
+    models_str = ", ".join(get_openrouter_candidate_models())
+    print(f"⚡ OpenRouter Provider: {'Enabled (Cascade: ' + models_str + ')' if OPENROUTER_API_KEY else 'Disabled (Using Gemini direct)'}")
 
     app = (
         Application.builder()
