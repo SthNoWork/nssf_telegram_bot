@@ -154,6 +154,17 @@
 
     if (hasUserLoc) {
       renderUserLocation(userLat, userLng);
+    } else if (navigator.geolocation) {
+      // Prompt user for location immediately on website load
+      navigator.geolocation.getCurrentPosition(
+        function(pos) {
+          renderUserLocation(pos.coords.latitude, pos.coords.longitude);
+        },
+        function(err) {
+          console.warn('Geolocation permission not granted or unavailable:', err);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
     }
 
     // Live update button handler

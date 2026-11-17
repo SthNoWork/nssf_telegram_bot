@@ -308,10 +308,6 @@ STRINGS = {
         "btn_map": "🗺 មើលផែនទីរួម (View Map)",
         "btn_lang": "🌐 ភាសា / Language",
         "btn_emergency": "🚨 ករណីបន្ទាន់ (In Case of Emergency)",
-        "map_ask_location": "📍 **ដើម្បីបង្ហាញទីតាំងអ្នកនៅលើផែនទី និងស្វែងរកមន្ទីរពេទ្យដែលនៅជិតអ្នកបំផុត៖**\nសូមចុចប៊ូតុង **«📍 ចែករំលែកទីតាំងបច្ចុប្បន្ន»** ខាងក្រោម (Telegram នឹងសួរការអនុញ្ញាត)៖",
-        "btn_share_loc_for_map": "📍 ចែករំលែកទីតាំងបច្ចុប្បន្ន (Share Location)",
-        "btn_open_map_without_loc": "🗺 បើកផែនទីដោយមិនចែករំលែកទីតាំង",
-        "btn_update_my_loc": "🔄 ធ្វើបច្ចុប្បន្នភាពទីតាំង (Update My Location)",
         "choose_lang": "🌐 **សូមជ្រើសរើសភាសារបស់អ្នក / Please select your language:**",
         "lang_set": "✅ ភាសាត្រូវបានប្តូរទៅជា **ភាសាខ្មែរ**។",
         "emergency_info": (
@@ -380,10 +376,6 @@ STRINGS = {
         "btn_map": "🗺 View Nationwide Map",
         "btn_lang": "🌐 Language / ភាសា",
         "btn_emergency": "🚨 In Case of Emergency",
-        "map_ask_location": "📍 **To show your location on the map and find nearby partner hospitals:**\nPlease tap **«📍 Share My Location»** below (Telegram will ask for permission):",
-        "btn_share_loc_for_map": "📍 Share My Location",
-        "btn_open_map_without_loc": "🗺 Open Map Without Location",
-        "btn_update_my_loc": "🔄 Update My Location",
         "choose_lang": "🌐 **Please select your language / សូមជ្រើសរើសភាសារបស់អ្នក:**",
         "lang_set": "✅ Language has been set to **English**.",
         "emergency_info": (
@@ -456,21 +448,9 @@ def t(context: ContextTypes.DEFAULT_TYPE, key: str, user_id: str | int = None) -
     return STRINGS.get(lang, STRINGS["km"]).get(key, STRINGS["km"].get(key, ""))
 
 
-def get_map_url_for_user(context: ContextTypes.DEFAULT_TYPE, user_id: str | int = None) -> str:
-    base = MAP_WEB_URL
-    loc = context.user_data.get("last_loc")
-    if not loc and user_id:
-        settings = load_user_settings()
-        loc = settings.get(str(user_id), {}).get("last_loc")
-    if loc:
-        sep = "&" if "?" in base else "?"
-        return f"{base}{sep}lat={loc[0]}&lng={loc[1]}"
-    return base
-
-
 # 4. Keyboards
 def get_main_menu(context: ContextTypes.DEFAULT_TYPE, user_id: str | int = None):
-    map_btn = KeyboardButton(t(context, "btn_map", user_id))
+    map_btn = KeyboardButton(t(context, "btn_map", user_id), web_app=WebAppInfo(url=MAP_WEB_URL))
 
     keyboard = [
         [KeyboardButton(t(context, "btn_location", user_id), request_location=True)],
@@ -532,33 +512,11 @@ async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def map_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id if update.effective_user else None
-    loc = context.user_data.get("last_loc")
-    if not loc and user_id:
-        settings = load_user_settings()
-        loc = settings.get(str(user_id), {}).get("last_loc")
-
-    if not loc:
-        # Prompt user to share location via Telegram's native location permission dialog
-        prompt_text = t(context, "map_ask_location", user_id)
-        loc_keyboard = [
-            [KeyboardButton(t(context, "btn_share_loc_for_map", user_id), request_location=True)],
-            [KeyboardButton(t(context, "btn_open_map_without_loc", user_id))],
-            [KeyboardButton(t(context, "btn_back", user_id))],
-        ]
-        await update.message.reply_text(
-            prompt_text,
-            parse_mode="Markdown",
-            reply_markup=ReplyKeyboardMarkup(loc_keyboard, resize_keyboard=True, one_time_keyboard=True),
-        )
-        return
-
-    target_url = get_map_url_for_user(context, user_id)
 
     # Dual options: Mobile Telegram WebApp + Laptop/Desktop Browser
     buttons = [
-        [InlineKeyboardButton(t(context, "btn_open_web_app", user_id), web_app=WebAppInfo(url=target_url))],
-        [InlineKeyboardButton(t(context, "btn_open_browser", user_id), url=target_url)],
-        [InlineKeyboardButton(t(context, "btn_update_my_loc", user_id), callback_data="loc:request_new")],
+        [InlineKeyboardButton(t(context, "btn_open_web_app", user_id), web_app=WebAppInfo(url=MAP_WEB_URL))],
+        [InlineKeyboardButton(t(context, "btn_open_browser", user_id), url=MAP_WEB_URL)],
         [InlineKeyboardButton(t(context, "btn_back", user_id), callback_data="menu:back")],
     ]
     await update.message.reply_text(
@@ -672,11 +630,10 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
             disable_web_page_preview=True,
         )
 
-    # Area overview link on map (passes user's Telegram coordinates directly)
-    target_map_url = get_map_url_for_user(context, user_id)
+    # Area overview link on map
     area_buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton(t(context, "btn_open_web_app", user_id), web_app=WebAppInfo(url=target_map_url))],
-        [InlineKeyboardButton(t(context, "btn_open_browser", user_id), url=target_map_url)],
+        [InlineKeyboardButton(t(context, "btn_open_web_app", user_id), web_app=WebAppInfo(url=MAP_WEB_URL))],
+        [InlineKeyboardButton(t(context, "btn_open_browser", user_id), url=MAP_WEB_URL)],
     ])
     await update.message.reply_text(
         t(context, "btn_open_area_map", user_id),
@@ -716,21 +673,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             t(context, "welcome", user_id),
             parse_mode="Markdown",
             reply_markup=get_main_menu(context, user_id),
-        )
-        return
-
-    # Request new location
-    if data == "loc:request_new":
-        prompt_text = t(context, "map_ask_location", user_id)
-        loc_keyboard = [
-            [KeyboardButton(t(context, "btn_share_loc_for_map", user_id), request_location=True)],
-            [KeyboardButton(t(context, "btn_open_map_without_loc", user_id))],
-            [KeyboardButton(t(context, "btn_back", user_id))],
-        ]
-        await query.message.reply_text(
-            prompt_text,
-            parse_mode="Markdown",
-            reply_markup=ReplyKeyboardMarkup(loc_keyboard, resize_keyboard=True, one_time_keyboard=True),
         )
         return
 
@@ -810,25 +752,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     # 0. Back button trigger
     if "ថយក្រោយ" in user_text or "back" in user_lower:
         await start_command(update, context)
-        return
-
-    # 0.1 Direct map without location trigger
-    if "មិនចែករំលែកទីតាំង" in user_text or "without location" in user_lower:
-        target_url = MAP_WEB_URL
-        buttons = [
-            [InlineKeyboardButton(t(context, "btn_open_web_app", user_id), web_app=WebAppInfo(url=target_url))],
-            [InlineKeyboardButton(t(context, "btn_open_browser", user_id), url=target_url)],
-            [InlineKeyboardButton(t(context, "btn_back", user_id), callback_data="menu:back")],
-        ]
-        await update.message.reply_text(
-            t(context, "map_info", user_id),
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(buttons),
-        )
-        await update.message.reply_text(
-            "👇",
-            reply_markup=get_main_menu(context, user_id),
-        )
         return
 
     # 1. Language switch trigger
