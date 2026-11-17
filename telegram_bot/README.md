@@ -46,6 +46,8 @@ Configure `.env` in the project root:
 
 ```env
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_MODEL=google/gemini-2.0-flash-001
 GEMINI_API_KEY=your_gemini_api_key_here
 MAP_WEB_URL=https://sthnowork.github.io/nssf_telegram_bot/
 ```

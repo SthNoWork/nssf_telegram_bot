@@ -3,6 +3,7 @@ import json
 import math
 import os
 import time
+import urllib.request
 from dotenv import load_dotenv
 from google import genai
 from telegram import (
@@ -34,9 +35,48 @@ load_dotenv(os.path.join(PARENT_DIR, ".env"))
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
 MAP_WEB_URL = os.getenv("MAP_WEB_URL", "https://sthnowork.github.io/nssf_telegram_bot/")
 
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+
+
+def call_openrouter_sync(system_prompt: str, user_text: str) -> str | None:
+    """Calls OpenRouter chat completions endpoint synchronously with timeout."""
+    if not OPENROUTER_API_KEY:
+        return None
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY.strip()}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/SthNoWork/nssf_telegram_bot",
+        "X-Title": "NSSF Telegram Bot",
+        "User-Agent": "NSSFBot/1.0",
+    }
+    payload = {
+        "model": OPENROUTER_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_text},
+        ],
+        "max_tokens": 450,
+    }
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=12.0) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            choices = res_data.get("choices", [])
+            if choices:
+                return choices[0].get("message", {}).get("content", "").strip()
+    except Exception as e:
+        print(f"OpenRouter Error: {e}")
+        return None
 
 
 def resolve_file_path(filename, fallbacks=None):
@@ -747,8 +787,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     query_history.append(now)
 
-    # 9. Fallback to Gemini with compact prompt, output limits & timeout guard
-    if not client:
+    # 9. AI Resolution (OpenRouter priority if configured, fallback to Gemini)
+    if not OPENROUTER_API_KEY and not client:
         await update.message.reply_text(t(context, "gemini_missing_key"))
         return
 
@@ -777,39 +817,54 @@ Recent clinic terminations:
 {term_summary}
 If user asks about a terminated clinic, immediately warn them."""
 
-    # Resilience: Fallback models & retry logic for temporary 503/429 load spikes
-    candidate_models = []
-    for m in [GEMINI_MODEL, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
-        if m and m not in candidate_models:
-            candidate_models.append(m)
-
     response_text = None
-    for model_name in candidate_models:
-        for attempt in range(2):
-            try:
-                # Wrap API call in an asyncio executor with a 12s timeout guard
-                loop = asyncio.get_event_loop()
-                resp = await asyncio.wait_for(
-                    loop.run_in_executor(
-                        None,
-                        lambda: client.models.generate_content(
-                            model=model_name,
-                            contents=f"{compact_system_prompt}\n\nUser Question: {user_text}",
+
+    # Priority 1: OpenRouter (fast, reliable, no 503 errors)
+    if OPENROUTER_API_KEY:
+        loop = asyncio.get_event_loop()
+        try:
+            response_text = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: call_openrouter_sync(compact_system_prompt, user_text),
+                ),
+                timeout=12.0,
+            )
+        except Exception as e:
+            print(f"OpenRouter attempt failed: {e}")
+
+    # Priority 2: Direct Gemini with fallback models if OpenRouter did not yield a response
+    if not response_text and client:
+        candidate_models = []
+        for m in [GEMINI_MODEL, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+            if m and m not in candidate_models:
+                candidate_models.append(m)
+
+        for model_name in candidate_models:
+            for attempt in range(2):
+                try:
+                    loop = asyncio.get_event_loop()
+                    resp = await asyncio.wait_for(
+                        loop.run_in_executor(
+                            None,
+                            lambda: client.models.generate_content(
+                                model=model_name,
+                                contents=f"{compact_system_prompt}\n\nUser Question: {user_text}",
+                            ),
                         ),
-                    ),
-                    timeout=12.0,
-                )
-                if resp and resp.text:
-                    response_text = resp.text
+                        timeout=12.0,
+                    )
+                    if resp and resp.text:
+                        response_text = resp.text
+                        break
+                except Exception as e:
+                    err_str = str(e)
+                    if any(k in err_str for k in ["503", "429", "UNAVAILABLE", "timeout"]):
+                        await asyncio.sleep(1.5)
+                        continue
                     break
-            except Exception as e:
-                err_str = str(e)
-                if any(k in err_str for k in ["503", "429", "UNAVAILABLE", "timeout"]):
-                    await asyncio.sleep(1.5)
-                    continue
+            if response_text:
                 break
-        if response_text:
-            break
 
     if ai_status:
         try:
@@ -857,6 +912,7 @@ def main():
     print(f"⚠️ Loaded {len(terminations)} termination notices from {TERMINATIONS_FILE}")
     print(f"📋 Loaded {len(guidelines)} NSSF guideline topics from {GUIDELINES_FILE}")
     print(f"🗺 Map Web URL: {MAP_WEB_URL}")
+    print(f"⚡ OpenRouter Provider: {'Enabled (' + OPENROUTER_MODEL + ')' if OPENROUTER_API_KEY else 'Disabled (Using Gemini direct)'}")
 
     app = (
         Application.builder()
