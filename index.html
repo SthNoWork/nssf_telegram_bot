@@ -210,7 +210,12 @@
       shadowSize: [41, 41]
     });
 
-    const markersCluster = L.markerClusterGroup();
+    const markersCluster = L.markerClusterGroup({
+      disableClusteringAtZoom: 13,
+      maxClusterRadius: 40,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false
+    });
     let allMarkers = [];
     let currentFilter = 'all';
 
