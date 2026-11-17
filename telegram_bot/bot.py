@@ -159,7 +159,6 @@ GUIDELINES_FILE = resolve_file_path(
     os.path.join("data", "civic_guidelines.json"),
     ["civic_guidelines.json"],
 )
-REPORTS_FILE = os.path.join(BASE_DIR, "community_reports.json")
 SETTINGS_FILE = os.path.join(BASE_DIR, "data", "user_settings.json")
 
 
@@ -409,9 +408,6 @@ STRINGS = {
         "label_district": "ខណ្ឌ/ស្រុក៖",
         "label_phone": "ទូរស័ព្ទ៖",
         "open_maps": "បើកមើលទីតាំងលើ Google Maps",
-        "btn_verify_ok": "✅ ទទួលប័ណ្ណធម្មតា",
-        "btn_verify_bad": "❌ បដិសេធប័ណ្ណ",
-        "verify_thanks": "🙏 អរគុណសម្រាប់ការរាយការណ៍!",
         "gemini_missing_key": "⚠️ សូមដាក់ `GEMINI_API_KEY` ក្នុង `.env` ដើម្បីប្រើប្រាស់មុខងារឆ្លើយតបឆ្លាតវៃ។",
         "status_loc": "🔍 កំពុងស្វែងរក និងត្រួតពិនិត្យគ្លីនិកដៃគូជិតបំផុត...",
         "status_ai": "⏳ កំពុងដំណើរការស្វែងរកចម្លើយ...",
@@ -477,9 +473,6 @@ STRINGS = {
         "label_district": "District:",
         "label_phone": "Phone:",
         "open_maps": "Open in Google Maps",
-        "btn_verify_ok": "✅ Card Accepted",
-        "btn_verify_bad": "❌ Card Rejected",
-        "verify_thanks": "🙏 Thank you for your community report!",
         "gemini_missing_key": "⚠️ Please add `GEMINI_API_KEY` to your `.env` to enable AI triage.",
         "status_loc": "🔍 Searching and verifying nearest partner clinics...",
         "status_ai": "⏳ Consulting NSSF guidelines & generating response...",
@@ -676,16 +669,9 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📞 {t(context, 'label_phone')} `{fac['phone']}`\n"
             f"🗺 [{t(context, 'open_maps')}]({maps_url})"
         )
-        buttons = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(t(context, "btn_verify_ok"), callback_data=f"verify_ok:{fac['id']}"),
-                InlineKeyboardButton(t(context, "btn_verify_bad"), callback_data=f"verify_bad:{fac['id']}"),
-            ]
-        ])
         await update.message.reply_text(
             card_text,
             parse_mode="Markdown",
-            reply_markup=buttons,
             disable_web_page_preview=True,
         )
 
@@ -769,31 +755,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(t(context, "rule_self_text"), parse_mode="Markdown", reply_markup=back_btn)
     elif data == "rule:maternity":
         await query.edit_message_text(t(context, "rule_maternity_text"), parse_mode="Markdown", reply_markup=back_btn)
-
-    # Community verification callbacks
-    elif data.startswith("verify_"):
-        action, fac_id = data.split(":")
-        reports = {}
-        if os.path.exists(REPORTS_FILE):
-            try:
-                with open(REPORTS_FILE, "r", encoding="utf-8") as f:
-                    reports = json.load(f)
-            except Exception:
-                reports = {}
-
-        reports.setdefault(fac_id, {"ok": 0, "bad": 0})
-        if action == "verify_ok":
-            reports[fac_id]["ok"] += 1
-        else:
-            reports[fac_id]["bad"] += 1
-
-        with open(REPORTS_FILE, "w", encoding="utf-8") as f:
-            json.dump(reports, f, indent=2)
-
-        thanks = t(context, "verify_thanks")
-        await query.message.reply_text(
-            f"{thanks} (✅ {reports[fac_id]['ok']} | ❌ {reports[fac_id]['bad']})"
-        )
 
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
