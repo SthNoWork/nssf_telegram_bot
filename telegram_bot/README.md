@@ -16,7 +16,7 @@ The repository includes a standalone [index.html](file:///c:/Main/Github/test/in
    git add .
    git commit -m "feat: initial commit for NSSF bot and map"
    git branch -M main
-   git remote add origin https://github.com/<your-username>/<your-repo-name>.git
+   git remote add origin https://github.com/SthNoWork/nssf_telegram_bot.git
    git push -u origin main
    ```
 2. In your GitHub repository:
@@ -25,11 +25,11 @@ The repository includes a standalone [index.html](file:///c:/Main/Github/test/in
      - Source: `Deploy from a branch`
      - Branch: `main` / Folder: `/ (root)`
    - Click **Save**.
-3. GitHub Pages will give you a public URL:
-   `https://<your-username>.github.io/<your-repo-name>/`
-4. Set this URL in your `.env`:
+3. Your GitHub Pages URL:
+   `https://sthnowork.github.io/nssf_telegram_bot/`
+4. Set this URL in your `.env` (already the built-in default):
    ```env
-   MAP_WEB_URL=https://<your-username>.github.io/<your-repo-name>/
+   MAP_WEB_URL=https://sthnowork.github.io/nssf_telegram_bot/
    ```
 
 ---
@@ -47,7 +47,7 @@ Configure `.env` in the project root:
 ```env
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 GEMINI_API_KEY=your_gemini_api_key_here
-MAP_WEB_URL=https://<your-username>.github.io/<your-repo-name>/
+MAP_WEB_URL=https://sthnowork.github.io/nssf_telegram_bot/
 ```
 
 Start the bot:

@@ -30,7 +30,7 @@ load_dotenv(os.path.join(PARENT_DIR, ".env"))
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
-MAP_WEB_URL = os.getenv("MAP_WEB_URL", "http://localhost:8080/map")
+MAP_WEB_URL = os.getenv("MAP_WEB_URL", "https://sthnowork.github.io/nssf_telegram_bot/")
 
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
