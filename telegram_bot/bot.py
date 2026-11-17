@@ -1,6 +1,8 @@
+import asyncio
 import json
 import math
 import os
+import time
 from dotenv import load_dotenv
 from google import genai
 from telegram import (
@@ -9,7 +11,9 @@ from telegram import (
     KeyboardButton,
     ReplyKeyboardMarkup,
     Update,
+    WebAppInfo,
 )
+from telegram.constants import ChatAction
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -186,7 +190,33 @@ def check_if_terminated(facility: dict, terminations: list) -> dict | None:
     return None
 
 
-# 3. Bilingual UI Strings (Strictly NSSF)
+def search_clinic_by_name(query: str, facilities: list, terminations: list) -> list:
+    """Searches clinics directly by name or district locally with zero LLM tokens."""
+    q = query.lower().strip()
+    # Strip generic terms for tighter matching
+    for generic in ["មន្ទីរពេទ្យ", "មន្ទីរសម្រាកព្យាបាល", "មន្ទីរពហុព្យាបាល", "hospital", "clinic", "polyclinic"]:
+        q_clean = q.replace(generic, "").strip()
+        if len(q_clean) >= 3:
+            q = q_clean
+            break
+
+    if len(q) < 3:
+        return []
+
+    matches = []
+    for fac in facilities:
+        name_km = fac.get("name_km", "").lower()
+        name_en = fac.get("name_en", "").lower()
+        district = fac.get("district", "").lower()
+        if q in name_km or q in name_en or q in district:
+            term_notice = check_if_terminated(fac, terminations)
+            matches.append((fac, term_notice))
+            if len(matches) >= 3:
+                break
+    return matches
+
+
+# 3. Bilingual UI Strings
 STRINGS = {
     "km": {
         "welcome": (
@@ -197,8 +227,9 @@ STRINGS = {
             "• 📋 **លក្ខខណ្ឌ & អត្ថប្រយោជន៍** សម្រាប់កម្មករ និងស្វ័យនិយោជន៍\n"
             "• 🗺 **មើលផែនទីរួម** មូលដ្ឋានសុខាភិបាលទូទាំងប្រទេស\n"
             "• 🚨 **ករណីបន្ទាន់** ព័ត៌មានរហ័ស\n\n"
-            "សូមជ្រើសរើសមុខងារខាងក្រោម៖"
+            "💡 **ចំណាំ៖** អ្នកអាចចុចប៊ូតុងខាងក្រោម ឬ **គ្រាន់តែវាយសំណួររបស់អ្នកផ្ទាល់** (ឧ. ឈ្មោះគ្លីនិក ឬរោគសញ្ញា) ដោយមិនចាំបាច់ចុចប៊ូតុងក៏បាន!"
         ),
+        "btn_back": "🔙 ថយក្រោយ (Back)",
         "btn_location": "🏥 ស្វែងរកមន្ទីរពេទ្យជិតបំផុត (Share Location)",
         "btn_issues": "🩺 ប្រភេទបញ្ហា & សេវា",
         "btn_rules": "📋 លក្ខខណ្ឌ & អត្ថប្រយោជន៍",
@@ -215,6 +246,7 @@ STRINGS = {
         "map_info": "🗺 **ផែនទីមូលដ្ឋានសុខាភិបាលដៃគូ ប.ស.ស. ទូទាំងប្រទេស៖**\nចុចប៊ូតុងខាងក្រោមដើម្បីបើកមើលទីតាំងមន្ទីរពេទ្យសកម្ម (ពណ៌បៃតង) និងគ្លីនិកដែលត្រូវបានបញ្ចប់កិច្ចព្រមព្រៀង (ពណ៌ក្រហម)៖",
         "btn_open_web_map": "🗺 បើកមើលផែនទីអន្តរកម្ម (Interactive Map)",
         "btn_open_gmaps": "🌐 បើកលើ Google Maps",
+        "btn_open_area_map": "🗺 មើលគ្លីនិកជុំវិញទីតាំងអ្នក",
         "issues_menu_title": "🩺 **សូមជ្រើសរើសប្រភេទបញ្ហាសុខភាព ឬសេវា ប.ស.ស. ដែលអ្នកចង់ដឹង៖**",
         "rules_menu_title": "📋 **សូមជ្រើសរើសប្រភេទសមាជិក ដើម្បីពិនិត្យលក្ខខណ្ឌ និងឯកសារតម្រូវ៖**",
         "btn_rule_worker": "👷 កម្មករនិយោជិត (Formal Worker)",
@@ -242,6 +274,7 @@ STRINGS = {
         "terminated_suffix": "ត្រូវបានបញ្ចប់/ផ្អាកកិច្ចព្រមព្រៀងកាលពីថ្ងៃទី",
         "view_official_notice": "មើលសេចក្តីជូនដំណឹងផ្លូវការ",
         "active_clinics_title": "✅ **មូលដ្ឋានសុខាភិបាលដៃគូ ប.ស.ស. ដែលនៅជិតអ្នកបំផុត៖**",
+        "clinic_search_result_title": "🏥 **លទ្ធផលស្វែងរកមូលដ្ឋានសុខាភិបាល៖**",
         "label_district": "ខណ្ឌ/ស្រុក៖",
         "label_phone": "ទូរស័ព្ទ៖",
         "open_maps": "បើកមើលទីតាំងលើ Google Maps",
@@ -249,6 +282,9 @@ STRINGS = {
         "btn_verify_bad": "❌ បដិសេធប័ណ្ណ",
         "verify_thanks": "🙏 អរគុណសម្រាប់ការរាយការណ៍!",
         "gemini_missing_key": "⚠️ សូមដាក់ `GEMINI_API_KEY` ក្នុង `.env` ដើម្បីប្រើប្រាស់មុខងារឆ្លើយតបឆ្លាតវៃ។",
+        "status_loc": "🔍 កំពុងស្វែងរក និងត្រួតពិនិត្យគ្លីនិកដៃគូជិតបំផុត...",
+        "status_ai": "⏳ កំពុងដំណើរការស្វែងរកចម្លើយ...",
+        "rate_limited": "⚠️ អ្នកបានសួរសំណួរញឹកញាប់ពេក។ សូមរង់ចាំ ១ នាទី រួចសួរម្តងទៀត។",
     },
     "en": {
         "welcome": (
@@ -259,8 +295,9 @@ STRINGS = {
             "• 📋 **Eligibility & Checklists**: Rules for formal workers and self-employed members\n"
             "• 🗺 **Nationwide Map**: View active and terminated clinics on interactive web map\n"
             "• 🚨 **In Case of Emergency**: Fast access hotlines & instructions\n\n"
-            "Select an option below to begin:"
+            "💡 **Tip:** You can tap the buttons below or **just type your question directly** (e.g. clinic name or question) without having to click anything!"
         ),
+        "btn_back": "🔙 Back",
         "btn_location": "🏥 Find Nearest Clinic (Share Location)",
         "btn_issues": "🩺 Issue Types & Services",
         "btn_rules": "📋 Eligibility & Rules",
@@ -277,6 +314,7 @@ STRINGS = {
         "map_info": "🗺 **Nationwide NSSF Healthcare Facilities Map:**\nClick below to open the interactive map showing active clinics (green) vs terminated clinics (red):",
         "btn_open_web_map": "🗺 Open Interactive Web Map",
         "btn_open_gmaps": "🌐 Open Google Maps",
+        "btn_open_area_map": "🗺 View Clinics in Your Area",
         "issues_menu_title": "🩺 **Select a topic to view official NSSF coverage rules:**",
         "rules_menu_title": "📋 **Select your membership type to view eligibility criteria:**",
         "btn_rule_worker": "👷 Formal Workers",
@@ -304,6 +342,7 @@ STRINGS = {
         "terminated_suffix": "Contract terminated or suspended on",
         "view_official_notice": "View Official Notice",
         "active_clinics_title": "✅ **Nearest Active NSSF Partner Healthcare Facilities:**",
+        "clinic_search_result_title": "🏥 **Healthcare Facility Search Results:**",
         "label_district": "District:",
         "label_phone": "Phone:",
         "open_maps": "Open in Google Maps",
@@ -311,6 +350,9 @@ STRINGS = {
         "btn_verify_bad": "❌ Card Rejected",
         "verify_thanks": "🙏 Thank you for your community report!",
         "gemini_missing_key": "⚠️ Please add `GEMINI_API_KEY` to your `.env` to enable AI triage.",
+        "status_loc": "🔍 Searching and verifying nearest partner clinics...",
+        "status_ai": "⏳ Consulting NSSF guidelines & generating response...",
+        "rate_limited": "⚠️ You are sending requests too quickly. Please wait 1 minute before asking again.",
     },
 }
 
@@ -326,6 +368,12 @@ def t(context: ContextTypes.DEFAULT_TYPE, key: str) -> str:
 
 # 4. Keyboards
 def get_main_menu(context: ContextTypes.DEFAULT_TYPE):
+    # Direct In-App WebApp button if HTTPS, otherwise normal button
+    if MAP_WEB_URL.startswith("https://"):
+        map_btn = KeyboardButton(t(context, "btn_map"), web_app=WebAppInfo(url=MAP_WEB_URL))
+    else:
+        map_btn = KeyboardButton(t(context, "btn_map"))
+
     keyboard = [
         [KeyboardButton(t(context, "btn_location"), request_location=True)],
         [
@@ -333,14 +381,14 @@ def get_main_menu(context: ContextTypes.DEFAULT_TYPE):
             KeyboardButton(t(context, "btn_rules")),
         ],
         [
-            KeyboardButton(t(context, "btn_map")),
+            map_btn,
             KeyboardButton(t(context, "btn_lang")),
         ],
         [
             KeyboardButton(t(context, "btn_emergency")),
         ],
     ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
 
 
 def get_issues_inline(context: ContextTypes.DEFAULT_TYPE):
@@ -353,6 +401,7 @@ def get_issues_inline(context: ContextTypes.DEFAULT_TYPE):
         label = data.get(btn_key, issue_id)
         buttons.append([InlineKeyboardButton(label, callback_data=f"issue:{issue_id}")])
 
+    buttons.append([InlineKeyboardButton(t(context, "btn_back"), callback_data="menu:back")])
     return InlineKeyboardMarkup(buttons)
 
 
@@ -384,10 +433,14 @@ async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def map_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gmaps_url = "https://www.google.com/maps/search/NSSF+hospital+Cambodia"
+    if MAP_WEB_URL.startswith("https://"):
+        web_app_btn = InlineKeyboardButton(t(context, "btn_open_web_map"), web_app=WebAppInfo(url=MAP_WEB_URL))
+    else:
+        web_app_btn = InlineKeyboardButton(t(context, "btn_open_web_map"), url=MAP_WEB_URL)
+
     buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton(t(context, "btn_open_web_map"), url=MAP_WEB_URL)],
-        [InlineKeyboardButton(t(context, "btn_open_gmaps"), url=gmaps_url)],
+        [web_app_btn],
+        [InlineKeyboardButton(t(context, "btn_back"), callback_data="menu:back")],
     ])
     await update.message.reply_text(
         t(context, "map_info"),
@@ -412,7 +465,22 @@ async def issues_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    try:
+        await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.FIND_LOCATION)
+    except Exception:
+        pass
+
+    status_msg = None
+    try:
+        status_msg = await update.message.reply_text(t(context, "status_loc"))
+    except Exception:
+        pass
+
     user_loc = update.message.location
+    # Location memory caching
+    context.user_data["last_loc"] = (user_loc.latitude, user_loc.longitude)
+
     facilities = load_facilities()
     terminations = load_terminations()
     lang = get_lang(context)
@@ -427,6 +495,13 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     active_results = [item for item in scored if item[2] is None][:3]
     terminated_nearby = [item for item in scored if item[2] is not None and item[0] <= 15.0]
+
+    # Clean up status message
+    if status_msg:
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
 
     # 1. Warn about nearby terminated clinics
     if terminated_nearby:
@@ -475,12 +550,23 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
             disable_web_page_preview=True,
         )
 
+    # Area overview link on map
+    area_map_url = f"https://www.google.com/maps/search/hospital/@{user_loc.latitude},{user_loc.longitude},13z"
+    area_buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton(t(context, "btn_open_area_map"), url=area_map_url)]
+    ])
+    await update.message.reply_text(
+        "🗺",
+        reply_markup=area_buttons,
+    )
+
 
 async def handle_rules_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton(t(context, "btn_rule_worker"), callback_data="rule:worker")],
         [InlineKeyboardButton(t(context, "btn_rule_self"), callback_data="rule:self")],
         [InlineKeyboardButton(t(context, "btn_rule_maternity"), callback_data="rule:maternity")],
+        [InlineKeyboardButton(t(context, "btn_back"), callback_data="menu:back")],
     ])
     await update.message.reply_text(
         t(context, "rules_menu_title"),
@@ -494,6 +580,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
     lang = get_lang(context)
+
+    # Back to main menu
+    if data == "menu:back":
+        await query.message.reply_text(
+            t(context, "welcome"),
+            parse_mode="Markdown",
+            reply_markup=get_main_menu(context),
+        )
+        return
 
     # Language selection
     if data.startswith("lang:"):
@@ -515,16 +610,18 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text_key = "text_km" if lang == "km" else "text_en"
         response_text = issue_data.get(text_key, "")
         if response_text:
-            await query.message.reply_text(response_text, parse_mode="Markdown")
+            back_btn = InlineKeyboardMarkup([[InlineKeyboardButton(t(context, "btn_back"), callback_data="menu:back")]])
+            await query.message.reply_text(response_text, parse_mode="Markdown", reply_markup=back_btn)
         return
 
     # Eligibility rules callbacks (Zero LLM Tokens)
+    back_btn = InlineKeyboardMarkup([[InlineKeyboardButton(t(context, "btn_back"), callback_data="menu:back")]])
     if data == "rule:worker":
-        await query.edit_message_text(t(context, "rule_worker_text"), parse_mode="Markdown")
+        await query.edit_message_text(t(context, "rule_worker_text"), parse_mode="Markdown", reply_markup=back_btn)
     elif data == "rule:self":
-        await query.edit_message_text(t(context, "rule_self_text"), parse_mode="Markdown")
+        await query.edit_message_text(t(context, "rule_self_text"), parse_mode="Markdown", reply_markup=back_btn)
     elif data == "rule:maternity":
-        await query.edit_message_text(t(context, "rule_maternity_text"), parse_mode="Markdown")
+        await query.edit_message_text(t(context, "rule_maternity_text"), parse_mode="Markdown", reply_markup=back_btn)
 
     # Community verification callbacks
     elif data.startswith("verify_"):
@@ -554,6 +651,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles text messages using local keyword interception (Token Saving) before LLM fallback."""
+    try:
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    except Exception:
+        pass
+
     user_text = update.message.text.strip()
     user_lower = user_text.lower()
     lang = get_lang(context)
@@ -599,7 +701,33 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await issues_command(update, context)
         return
 
-    # 6. TOKEN SAVING STRATEGY: Local Keyword Interception from civic_guidelines.json
+    # 6. Direct Local Clinic Name Search (Zero LLM Tokens)
+    facilities = load_facilities()
+    terminations = load_terminations()
+    clinic_matches = search_clinic_by_name(user_text, facilities, terminations)
+    if clinic_matches:
+        await update.message.reply_text(t(context, "clinic_search_result_title"), parse_mode="Markdown")
+        for fac, term_notice in clinic_matches:
+            name_display = fac["name_km"] if lang == "km" else fac["name_en"]
+            maps_url = f"https://www.google.com/maps?q={fac['lat']},{fac['lng']}"
+            term_warning = ""
+            if term_notice:
+                notice_date = term_notice.get("date", "")[:10]
+                notice_url = term_notice.get("url", "")
+                suffix = t(context, "terminated_suffix")
+                link_label = t(context, "view_official_notice")
+                term_warning = f"\n⚠️ **{suffix} `{notice_date}`** ([{link_label}]({notice_url}))"
+
+            card_text = (
+                f"🏥 **{name_display}**{term_warning}\n"
+                f"📍 {t(context, 'label_district')} {fac['district']}, {fac['province']}\n"
+                f"📞 {t(context, 'label_phone')} `{fac['phone']}`\n"
+                f"🗺 [{t(context, 'open_maps')}]({maps_url})"
+            )
+            await update.message.reply_text(card_text, parse_mode="Markdown", disable_web_page_preview=True)
+        return
+
+    # 7. TOKEN SAVING STRATEGY: Local Keyword Interception from civic_guidelines.json
     guidelines = load_guidelines()
     text_key = "text_km" if lang == "km" else "text_en"
     for _, issue_info in guidelines.items():
@@ -608,12 +736,28 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text(issue_info[text_key], parse_mode="Markdown")
             return
 
-    # 7. Fallback to Gemini with compact prompt & output limits
+    # 8. Rate Limiting Protection (Max 10 AI queries per 120s per user)
+    now = time.time()
+    query_history = context.user_data.setdefault("query_times", [])
+    # Keep only timestamps within last 120s
+    query_history = [ts for ts in query_history if now - ts < 120]
+    context.user_data["query_times"] = query_history
+    if len(query_history) >= 10:
+        await update.message.reply_text(t(context, "rate_limited"))
+        return
+    query_history.append(now)
+
+    # 9. Fallback to Gemini with compact prompt, output limits & timeout guard
     if not client:
         await update.message.reply_text(t(context, "gemini_missing_key"))
         return
 
-    terminations = load_terminations()
+    ai_status = None
+    try:
+        ai_status = await update.message.reply_text(t(context, "status_ai"))
+    except Exception:
+        pass
+
     recent_terms = terminations[:5]
     term_summary = "\n".join(
         f"- {t_item.get('date', '')[:10]}: {t_item.get('text', '').splitlines()[0]}"
@@ -633,14 +777,72 @@ Recent clinic terminations:
 {term_summary}
 If user asks about a terminated clinic, immediately warn them."""
 
-    try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=f"{compact_system_prompt}\n\nUser Question: {user_text}",
+    # Resilience: Fallback models & retry logic for temporary 503/429 load spikes
+    candidate_models = []
+    for m in [GEMINI_MODEL, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+        if m and m not in candidate_models:
+            candidate_models.append(m)
+
+    response_text = None
+    for model_name in candidate_models:
+        for attempt in range(2):
+            try:
+                # Wrap API call in an asyncio executor with a 12s timeout guard
+                loop = asyncio.get_event_loop()
+                resp = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None,
+                        lambda: client.models.generate_content(
+                            model=model_name,
+                            contents=f"{compact_system_prompt}\n\nUser Question: {user_text}",
+                        ),
+                    ),
+                    timeout=12.0,
+                )
+                if resp and resp.text:
+                    response_text = resp.text
+                    break
+            except Exception as e:
+                err_str = str(e)
+                if any(k in err_str for k in ["503", "429", "UNAVAILABLE", "timeout"]):
+                    await asyncio.sleep(1.5)
+                    continue
+                break
+        if response_text:
+            break
+
+    if ai_status:
+        try:
+            await ai_status.delete()
+        except Exception:
+            pass
+
+    if response_text:
+        await update.message.reply_text(response_text, reply_markup=get_main_menu(context))
+    else:
+        busy_msg = (
+            "⚠️ ប្រព័ន្ធឆ្លើយសំណួរស្វ័យប្រវត្តិកំពុងមានការប្រើប្រាស់ច្រើនបណ្តោះអាសន្ន។ សូមព្យាយាមសួរម្តងទៀតបន្តិចក្រោយ ឬជ្រើសរើសមុខងារពីប៊ូតុងម៉ឺនុយខាងក្រោម។"
+            if lang == "km"
+            else "⚠️ The AI assistant is currently experiencing high traffic. Please try again in a few moments or select an option from the menu buttons below."
         )
-        await update.message.reply_text(response.text)
+        await update.message.reply_text(busy_msg, reply_markup=get_main_menu(context))
+
+
+async def post_init(application: Application):
+    from telegram import BotCommand
+    commands = [
+        BotCommand("start", "🏠 ម៉ឺនុយដើម / Main Menu"),
+        BotCommand("map", "🗺 មើលផែនទី / Interactive Map"),
+        BotCommand("issues", "🩺 ប្រភេទបញ្ហា & សេវា / Issues"),
+        BotCommand("rules", "📋 លក្ខខណ្ឌ & អត្ថប្រយោជន៍ / Rules"),
+        BotCommand("emergency", "🚨 ករណីបន្ទាន់ / Emergency"),
+        BotCommand("language", "🌐 ភាសា / Language"),
+    ]
+    try:
+        await application.bot.set_my_commands(commands)
+        print("✅ Registered persistent bot commands with Telegram.")
     except Exception as e:
-        await update.message.reply_text(f"⚠️ Error: {str(e)}")
+        print(f"Warning: Could not set bot commands: {e}")
 
 
 def main():
@@ -654,13 +856,20 @@ def main():
     print(f"📦 Loaded {len(facilities)} facilities from {NSSF_GEOJSON_FILE}")
     print(f"⚠️ Loaded {len(terminations)} termination notices from {TERMINATIONS_FILE}")
     print(f"📋 Loaded {len(guidelines)} NSSF guideline topics from {GUIDELINES_FILE}")
+    print(f"🗺 Map Web URL: {MAP_WEB_URL}")
 
-    app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    app = (
+        Application.builder()
+        .token(TELEGRAM_BOT_TOKEN)
+        .post_init(post_init)
+        .build()
+    )
 
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("language", language_command))
     app.add_handler(CommandHandler("map", map_command))
     app.add_handler(CommandHandler("issues", issues_command))
+    app.add_handler(CommandHandler("rules", handle_rules_menu))
     app.add_handler(CommandHandler("emergency", emergency_command))
     app.add_handler(MessageHandler(filters.LOCATION, handle_location))
     app.add_handler(CallbackQueryHandler(handle_callback))

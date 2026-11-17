@@ -58,9 +58,22 @@ py telegram_bot/bot.py
 
 ---
 
-## 3. Project Structure
+## 3. Advanced Features & Protections
+
+* **In-App Telegram WebApp:** Tapping `🗺 View Map` opens the Leaflet map directly inside Telegram without opening an external browser.
+* **Direct Local Clinic Search (Zero Tokens):** Typing any clinic or district name (e.g., *"Calmette"*, *"កាល់ម៉ែត"*, *"Kossamak"*, *"ពន្លឺពេជ្រ"*) matches local records and immediately flags terminated agreements without calling Gemini.
+* **Location Memory Caching:** The user's last GPS pin is stored in `context.user_data["last_loc"]` for instant follow-up searches.
+* **Rate-Limiting & Timeout Protection:** Limits rapid LLM queries to 10 per 2 minutes per user and enforces a 12s timeout guard.
+* **Automated CI/CD Deployments:** Includes `.github/workflows/pages.yml` to automatically build and deploy `index.html` to GitHub Pages upon pushing to `main`.
+
+---
+
+## 4. Project Structure
 
 ```text
+├── .github/
+│   └── workflows/
+│       └── pages.yml                     # Automated GitHub Pages CI/CD workflow
 ├── .gitignore                            # Strict exclusion of .env and temporary files
 ├── index.html                            # Standalone interactive map for GitHub Pages
 ├── verified_terminations.json            # 2024-2026 contract terminations
