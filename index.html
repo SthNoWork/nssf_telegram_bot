@@ -11,27 +11,40 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', 'Content', sans-serif; background: #0e1621; color: #fff; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-    header { background: #17212b; padding: 12px 18px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #232e3c; flex-wrap: wrap; gap: 10px; z-index: 1000; }
-    header h1 { font-size: 1.05rem; color: #2ea6ff; display: flex; align-items: center; gap: 8px; }
+    header { background: #17212b; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #232e3c; flex-wrap: wrap; gap: 10px; z-index: 1000; }
+    header h1 { font-size: 1.1rem; color: #2ea6ff; display: flex; align-items: center; gap: 8px; }
     .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-    .search-input { background: #0e1621; border: 1px solid #232e3c; color: #fff; padding: 7px 12px; border-radius: 8px; font-size: 0.85rem; outline: none; width: 220px; }
-    .search-input:focus { border-color: #2ea6ff; }
-    .filter-btn { background: #0e1621; border: 1px solid #232e3c; color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; transition: 0.2s; }
+    .search-input { background: #0e1621; border: 1px solid #232e3c; color: #fff; padding: 8px 14px; border-radius: 8px; font-size: 0.88rem; outline: none; width: 220px; transition: 0.2s; }
+    .search-input:focus { border-color: #2ea6ff; width: 260px; }
+    .filter-btn { background: #0e1621; border: 1px solid #232e3c; color: #fff; padding: 7px 14px; border-radius: 8px; font-size: 0.82rem; cursor: pointer; transition: 0.2s; }
     .filter-btn.active { background: #2ea6ff; border-color: #2ea6ff; color: #fff; font-weight: 600; }
-    .badge { padding: 4px 10px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; }
+    .badge { padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
     .badge-active { background: rgba(46, 204, 113, 0.2); color: #2ecc71; border: 1px solid #2ecc71; }
     .badge-term { background: rgba(231, 76, 60, 0.2); color: #e74c3c; border: 1px solid #e74c3c; }
+    .user-banner { background: #2ea6ff; color: #fff; padding: 6px 16px; font-size: 0.82rem; font-weight: 600; text-align: center; display: none; }
     #map { flex: 1; width: 100%; height: 100%; }
     .custom-popup .leaflet-popup-content-wrapper { background: #17212b; color: #fff; border-radius: 10px; border: 1px solid #232e3c; }
     .custom-popup .leaflet-popup-tip { background: #17212b; }
-    .popup-title { font-size: 0.98rem; font-weight: bold; margin-bottom: 5px; color: #2ea6ff; }
-    .popup-meta { font-size: 0.84rem; color: #a4b0be; line-height: 1.5; }
-    .term-box { background: rgba(231, 76, 60, 0.15); border: 1px solid #e74c3c; padding: 8px; border-radius: 6px; margin-top: 8px; font-size: 0.8rem; color: #ff6b6b; }
+    .popup-title { font-size: 1rem; font-weight: bold; margin-bottom: 5px; color: #2ea6ff; }
+    .popup-meta { font-size: 0.85rem; color: #a4b0be; line-height: 1.5; }
+    .term-box { background: rgba(231, 76, 60, 0.15); border: 1px solid #e74c3c; padding: 8px; border-radius: 6px; margin-top: 8px; font-size: 0.82rem; color: #ff6b6b; }
     .term-box a { color: #2ea6ff; text-decoration: underline; }
-    .btn-nav { display: inline-block; margin-top: 8px; padding: 6px 12px; background: #2ea6ff; color: #fff; text-decoration: none; border-radius: 6px; font-size: 0.8rem; font-weight: 600; }
+    .btn-nav { display: inline-block; margin-top: 8px; padding: 6px 12px; background: #2ea6ff; color: #fff; text-decoration: none; border-radius: 6px; font-size: 0.82rem; font-weight: 600; }
+
+    /* Desktop and Laptop Widescreen Enhancements */
+    @media (min-width: 900px) {
+      header { padding: 14px 28px; }
+      header h1 { font-size: 1.25rem; }
+      .search-input { width: 300px; font-size: 0.95rem; }
+      .search-input:focus { width: 360px; }
+      .filter-btn { padding: 8px 16px; font-size: 0.9rem; }
+      .popup-title { font-size: 1.1rem; }
+      .popup-meta { font-size: 0.92rem; }
+    }
   </style>
 </head>
 <body>
+  <div id="user-banner" class="user-banner">📍 បង្ហាញគ្លីនិកជិតទីតាំងរបស់អ្នក / Showing partner clinics near your Telegram location</div>
   <header>
     <h1>🏥 NSSF Partner Facilities 🇰🇭</h1>
     <div class="controls">
@@ -48,12 +61,44 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script>
-    const map = L.map('map').setView([11.5564, 104.9282], 8);
+    // 1. Read URL Parameters for Location (from Telegram)
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlLat = parseFloat(urlParams.get('lat'));
+    const urlLng = parseFloat(urlParams.get('lng'));
+    const hasUserLoc = !isNaN(urlLat) && !isNaN(urlLng);
+
+    // Initial center: User's Telegram coordinates or default Cambodia center
+    const defaultCenter = hasUserLoc ? [urlLat, urlLng] : [11.5564, 104.9282];
+    const defaultZoom = hasUserLoc ? 14 : 8;
+
+    const map = L.map('map').setView(defaultCenter, defaultZoom);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
+
+    if (hasUserLoc) {
+      document.getElementById('user-banner').style.display = 'block';
+
+      // Blue marker for User's live location from Telegram
+      const userIcon = new L.Icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+        iconSize: [28, 45],
+        iconAnchor: [14, 45],
+        popupAnchor: [1, -38],
+        shadowSize: [41, 41]
+      });
+
+      const userMarker = L.marker([urlLat, urlLng], { icon: userIcon, zIndexOffset: 1000 }).addTo(map);
+      userMarker.bindPopup(`
+        <div class="custom-popup">
+          <div class="popup-title" style="color: #2ea6ff;">📍 ទីតាំងរបស់អ្នក / Your Location</div>
+          <div class="popup-meta">បានទទួលពី Telegram (No browser permission needed)</div>
+        </div>
+      `).openPopup();
+    }
 
     const greenIcon = new L.Icon({
       iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
@@ -77,6 +122,16 @@
     let allMarkers = [];
     let currentFilter = 'all';
 
+    function haversineKm(lat1, lon1, lat2, lon2) {
+      const R = 6371.0;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+    }
+
     function checkTermination(nameKm, nameEn, terminations) {
       const coreKm = nameKm.replace(/មន្ទីរពហុព្យាបាល|មន្ទីរសម្រាកព្យាបាល|មន្ទីរពេទ្យ/g, '').trim();
       const coreEn = nameEn.replace(/Hospital|Clinic|Polyclinic|Referral/gi, '').trim();
@@ -92,7 +147,6 @@
       let geojson = null;
       let terminations = [];
 
-      // Load terminations
       try {
         const termRes = await fetch('verified_terminations.json');
         if (termRes.ok) terminations = await termRes.json();
@@ -100,7 +154,6 @@
         console.warn('Could not load verified_terminations.json', e);
       }
 
-      // Try loading geojson from paths
       const paths = ['telegram_bot/data/nssf.geojson', 'data/nssf.geojson', 'telegram_bot/data/nssf.json'];
       for (const p of paths) {
         try {
@@ -137,6 +190,12 @@
 
         if (isTerm) termCount++; else activeCount++;
 
+        let distText = '';
+        if (hasUserLoc) {
+          const dist = haversineKm(urlLat, urlLng, lat, lng);
+          distText = ` (${dist.toFixed(1)} km)`;
+        }
+
         const icon = isTerm ? redIcon : greenIcon;
         const marker = L.marker([lat, lng], { icon });
 
@@ -156,7 +215,7 @@
             <div class="popup-title">${nameKm}</div>
             <div class="popup-meta">
               <div><strong>EN:</strong> ${nameEn}</div>
-              <div><strong>📍 ទីតាំង៖</strong> ${district}, ${province}</div>
+              <div><strong>📍 ទីតាំង៖</strong> ${district}, ${province}${distText}</div>
               <div><strong>📞 ទូរស័ព្ទ៖</strong> ${phone}</div>
               ${termHtml}
               <a class="btn-nav" href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank">🗺 បើកមើលផ្លូវ (Google Maps)</a>

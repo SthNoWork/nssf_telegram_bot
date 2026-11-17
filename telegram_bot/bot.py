@@ -101,6 +101,38 @@ GUIDELINES_FILE = resolve_file_path(
     ["civic_guidelines.json"],
 )
 REPORTS_FILE = os.path.join(BASE_DIR, "community_reports.json")
+SETTINGS_FILE = os.path.join(BASE_DIR, "data", "user_settings.json")
+
+
+# Persistent User Settings Helpers
+_CACHED_SETTINGS = None
+
+
+def load_user_settings() -> dict:
+    global _CACHED_SETTINGS
+    if _CACHED_SETTINGS is not None:
+        return _CACHED_SETTINGS
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                _CACHED_SETTINGS = json.load(f)
+                return _CACHED_SETTINGS
+        except Exception:
+            pass
+    _CACHED_SETTINGS = {}
+    return _CACHED_SETTINGS
+
+
+def save_user_setting(user_id: str | int, key: str, value):
+    settings = load_user_settings()
+    u_key = str(user_id)
+    settings.setdefault(u_key, {})[key] = value
+    try:
+        os.makedirs(os.path.dirname(SETTINGS_FILE), exist_ok=True)
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2)
+    except Exception as e:
+        print(f"Error saving user settings: {e}")
 
 
 # 2. Data Loaders & Cache
@@ -284,8 +316,8 @@ STRINGS = {
             "• **សំខាន់៖** ហាមទុកប័ណ្ណ ប.ស.ស. នៅមន្ទីរពេទ្យពេលចេញពីពេទ្យដាច់ខាត!"
         ),
         "map_info": "🗺 **ផែនទីមូលដ្ឋានសុខាភិបាលដៃគូ ប.ស.ស. ទូទាំងប្រទេស៖**\nចុចប៊ូតុងខាងក្រោមដើម្បីបើកមើលទីតាំងមន្ទីរពេទ្យសកម្ម (ពណ៌បៃតង) និងគ្លីនិកដែលត្រូវបានបញ្ចប់កិច្ចព្រមព្រៀង (ពណ៌ក្រហម)៖",
-        "btn_open_web_map": "🗺 បើកមើលផែនទីអន្តរកម្ម (Interactive Map)",
-        "btn_open_gmaps": "🌐 បើកលើ Google Maps",
+        "btn_open_web_app": "📱 បើកក្នុង Telegram (Mobile)",
+        "btn_open_browser": "💻 បើកលើ Browser (Laptop / PC)",
         "btn_open_area_map": "🗺 មើលគ្លីនិកជុំវិញទីតាំងអ្នក",
         "issues_menu_title": "🩺 **សូមជ្រើសរើសប្រភេទបញ្ហាសុខភាព ឬសេវា ប.ស.ស. ដែលអ្នកចង់ដឹង៖**",
         "rules_menu_title": "📋 **សូមជ្រើសរើសប្រភេទសមាជិក ដើម្បីពិនិត្យលក្ខខណ្ឌ និងឯកសារតម្រូវ៖**",
@@ -352,8 +384,8 @@ STRINGS = {
             "• **Important:** Never leave your NSSF card behind at the hospital upon discharge!"
         ),
         "map_info": "🗺 **Nationwide NSSF Healthcare Facilities Map:**\nClick below to open the interactive map showing active clinics (green) vs terminated clinics (red):",
-        "btn_open_web_map": "🗺 Open Interactive Web Map",
-        "btn_open_gmaps": "🌐 Open Google Maps",
+        "btn_open_web_app": "📱 Open in Telegram (Mobile)",
+        "btn_open_browser": "💻 Open in Browser (Laptop / PC)",
         "btn_open_area_map": "🗺 View Clinics in Your Area",
         "issues_menu_title": "🩺 **Select a topic to view official NSSF coverage rules:**",
         "rules_menu_title": "📋 **Select your membership type to view eligibility criteria:**",
@@ -397,35 +429,57 @@ STRINGS = {
 }
 
 
-def get_lang(context: ContextTypes.DEFAULT_TYPE) -> str:
-    return context.user_data.get("lang", "km")
+def get_lang(context: ContextTypes.DEFAULT_TYPE, user_id: str | int = None) -> str:
+    # 1. In-memory check
+    if "lang" in context.user_data:
+        return context.user_data["lang"]
+    # 2. Disk persistence check
+    if user_id:
+        settings = load_user_settings()
+        persisted = settings.get(str(user_id), {}).get("lang")
+        if persisted:
+            context.user_data["lang"] = persisted
+            return persisted
+    return "km"
 
 
-def t(context: ContextTypes.DEFAULT_TYPE, key: str) -> str:
-    lang = get_lang(context)
+def t(context: ContextTypes.DEFAULT_TYPE, key: str, user_id: str | int = None) -> str:
+    lang = get_lang(context, user_id)
     return STRINGS.get(lang, STRINGS["km"]).get(key, STRINGS["km"].get(key, ""))
 
 
+def get_map_url_for_user(context: ContextTypes.DEFAULT_TYPE, user_id: str | int = None) -> str:
+    base = MAP_WEB_URL
+    loc = context.user_data.get("last_loc")
+    if not loc and user_id:
+        settings = load_user_settings()
+        loc = settings.get(str(user_id), {}).get("last_loc")
+    if loc:
+        sep = "&" if "?" in base else "?"
+        return f"{base}{sep}lat={loc[0]}&lng={loc[1]}"
+    return base
+
+
 # 4. Keyboards
-def get_main_menu(context: ContextTypes.DEFAULT_TYPE):
-    # Direct In-App WebApp button if HTTPS, otherwise normal button
-    if MAP_WEB_URL.startswith("https://"):
-        map_btn = KeyboardButton(t(context, "btn_map"), web_app=WebAppInfo(url=MAP_WEB_URL))
+def get_main_menu(context: ContextTypes.DEFAULT_TYPE, user_id: str | int = None):
+    target_url = get_map_url_for_user(context, user_id)
+    if target_url.startswith("https://"):
+        map_btn = KeyboardButton(t(context, "btn_map", user_id), web_app=WebAppInfo(url=target_url))
     else:
-        map_btn = KeyboardButton(t(context, "btn_map"))
+        map_btn = KeyboardButton(t(context, "btn_map", user_id))
 
     keyboard = [
-        [KeyboardButton(t(context, "btn_location"), request_location=True)],
+        [KeyboardButton(t(context, "btn_location", user_id), request_location=True)],
         [
-            KeyboardButton(t(context, "btn_issues")),
-            KeyboardButton(t(context, "btn_rules")),
+            KeyboardButton(t(context, "btn_issues", user_id)),
+            KeyboardButton(t(context, "btn_rules", user_id)),
         ],
         [
             map_btn,
-            KeyboardButton(t(context, "btn_lang")),
+            KeyboardButton(t(context, "btn_lang", user_id)),
         ],
         [
-            KeyboardButton(t(context, "btn_emergency")),
+            KeyboardButton(t(context, "btn_emergency", user_id)),
         ],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
@@ -473,19 +527,19 @@ async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def map_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if MAP_WEB_URL.startswith("https://"):
-        web_app_btn = InlineKeyboardButton(t(context, "btn_open_web_map"), web_app=WebAppInfo(url=MAP_WEB_URL))
-    else:
-        web_app_btn = InlineKeyboardButton(t(context, "btn_open_web_map"), url=MAP_WEB_URL)
+    user_id = update.effective_user.id if update.effective_user else None
+    target_url = get_map_url_for_user(context, user_id)
 
-    buttons = InlineKeyboardMarkup([
-        [web_app_btn],
-        [InlineKeyboardButton(t(context, "btn_back"), callback_data="menu:back")],
-    ])
+    # Dual options: Mobile Telegram WebApp + Laptop/Desktop Browser
+    buttons = [
+        [InlineKeyboardButton(t(context, "btn_open_web_app", user_id), web_app=WebAppInfo(url=target_url))],
+        [InlineKeyboardButton(t(context, "btn_open_browser", user_id), url=target_url)],
+        [InlineKeyboardButton(t(context, "btn_back", user_id), callback_data="menu:back")],
+    ]
     await update.message.reply_text(
-        t(context, "map_info"),
+        t(context, "map_info", user_id),
         parse_mode="Markdown",
-        reply_markup=buttons,
+        reply_markup=InlineKeyboardMarkup(buttons),
     )
 
 
@@ -518,12 +572,15 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 
     user_loc = update.message.location
-    # Location memory caching
+    user_id = update.effective_user.id if update.effective_user else None
+    # Location memory caching (in-memory + persistent disk)
     context.user_data["last_loc"] = (user_loc.latitude, user_loc.longitude)
+    if user_id:
+        save_user_setting(user_id, "last_loc", [user_loc.latitude, user_loc.longitude])
 
     facilities = load_facilities()
     terminations = load_terminations()
-    lang = get_lang(context)
+    lang = get_lang(context, user_id)
 
     scored = []
     for fac in facilities:
@@ -590,13 +647,14 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
             disable_web_page_preview=True,
         )
 
-    # Area overview link on map
-    area_map_url = f"https://www.google.com/maps/search/hospital/@{user_loc.latitude},{user_loc.longitude},13z"
+    # Area overview link on map (passes user's Telegram coordinates directly)
+    target_map_url = get_map_url_for_user(context, user_id)
     area_buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton(t(context, "btn_open_area_map"), url=area_map_url)]
+        [InlineKeyboardButton(t(context, "btn_open_web_app", user_id), web_app=WebAppInfo(url=target_map_url))],
+        [InlineKeyboardButton(t(context, "btn_open_browser", user_id), url=target_map_url)],
     ])
     await update.message.reply_text(
-        "🗺",
+        t(context, "btn_open_area_map", user_id),
         reply_markup=area_buttons,
     )
 
@@ -619,26 +677,29 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
-    lang = get_lang(context)
+    user_id = query.from_user.id if query.from_user else None
+    lang = get_lang(context, user_id)
 
     # Back to main menu
     if data == "menu:back":
         await query.message.reply_text(
-            t(context, "welcome"),
+            t(context, "welcome", user_id),
             parse_mode="Markdown",
-            reply_markup=get_main_menu(context),
+            reply_markup=get_main_menu(context, user_id),
         )
         return
 
-    # Language selection
+    # Language selection (saved permanently to disk)
     if data.startswith("lang:"):
         selected_lang = data.split(":")[1]
         context.user_data["lang"] = selected_lang
-        ack_text = t(context, "lang_set")
+        if user_id:
+            save_user_setting(user_id, "lang", selected_lang)
+        ack_text = t(context, "lang_set", user_id)
         await query.message.reply_text(
             ack_text,
             parse_mode="Markdown",
-            reply_markup=get_main_menu(context),
+            reply_markup=get_main_menu(context, user_id),
         )
         return
 
@@ -698,7 +759,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     user_text = update.message.text.strip()
     user_lower = user_text.lower()
-    lang = get_lang(context)
+    user_id = update.effective_user.id if update.effective_user else None
+    lang = get_lang(context, user_id)
 
     # 1. Language switch trigger
     if "ភាសា" in user_text or "language" in user_lower:
