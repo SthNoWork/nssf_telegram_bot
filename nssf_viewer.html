@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSSF Telegram Termination Notices Viewer</title>
+    <!-- Google Fonts for Khmer & English support -->
+    <link href="https://fonts.googleapis.com/css2?family=Content:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --tg-bg: #0e1621;
+            --tg-chat-bg: #17212b;
+            --tg-bubble-in: #182533;
+            --tg-text: #f5f5f5;
+            --tg-text-secondary: #87909b;
+            --tg-accent: #2ea6ff;
+            --tg-danger: #e53935;
+            --tg-border: #232e3c;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', 'Content', sans-serif;
+            background-color: var(--tg-bg);
+            color: var(--tg-text);
+            display: flex;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 800px;
+            height: 100%;
+            background-color: var(--tg-chat-bg);
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid var(--tg-border);
+            border-right: 1px solid var(--tg-border);
+        }
+
+        /* Header */
+        .chat-header {
+            padding: 15px 20px;
+            background-color: var(--tg-bubble-in);
+            border-bottom: 1px solid var(--tg-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .channel-info h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .channel-info p {
+            font-size: 12px;
+            color: var(--tg-text-secondary);
+        }
+
+        .search-box {
+            background: var(--tg-bg);
+            border: 1px solid var(--tg-border);
+            border-radius: 20px;
+            padding: 6px 14px;
+            color: #fff;
+            font-size: 13px;
+            width: 220px;
+            outline: none;
+        }
+
+        .search-box:focus {
+            border-color: var(--tg-accent);
+        }
+
+        /* Chat Body */
+        .chat-body {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        /* Message Bubble */
+        .message-bubble {
+            background-color: var(--tg-bubble-in);
+            border-radius: 12px;
+            padding: 12px 16px;
+            max-width: 85%;
+            align-self: flex-start;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            position: relative;
+            border-left: 4px solid var(--tg-danger);
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 11px;
+            color: var(--tg-text-secondary);
+        }
+
+        .badge {
+            background-color: rgba(229, 57, 53, 0.2);
+            color: #ff6b6b;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+
+        .message-text {
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: #e2e8f0;
+        }
+
+        .message-footer {
+            margin-top: 10px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .tg-link {
+            font-size: 11px;
+            color: var(--tg-accent);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .tg-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Loading / Error state */
+        .status-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--tg-text-secondary);
+            font-size: 14px;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--tg-border);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Header -->
+        <div class="chat-header">
+            <div class="channel-info">
+                <h2 id="channel-title">បេឡាជាតិសន្តិសុខសង្គម (ប.ស.ស.)</h2>
+                <p id="total-count">Loading notices...</p>
+            </div>
+            <input type="text" id="searchInput" class="search-box" placeholder="ស្វែងរកគ្លីនិក ឬកាលបរិច្ឆេទ..." onkeyup="filterMessages()">
+        </div>
+
+        <!-- Chat History Container -->
+        <div id="chatBody" class="chat-body">
+            <div class="status-state">Loading verified_terminations.json...<br><small>Make sure this HTML file is in the same folder as your JSON export.</small></div>
+        </div>
+    </div>
+
+    <script>
+        let allMessages = [];
+
+        async function loadTerminations() {
+            try {
+                const response = await fetch('verified_terminations.json');
+                if (!response.ok) throw new Error("HTTP error! status: " + response.status);
+
+                allMessages = await response.json();
+                document.getElementById('total-count').innerText = `${allMessages.length} Verified Terminations Loaded`;
+                renderMessages(allMessages);
+            } catch (error) {
+                console.error("Error loading JSON:", error);
+                document.getElementById('chatBody').innerHTML = `
+                    <div class="status-state" style="color: var(--tg-danger);">
+                        ❌ Could not load <b>verified_terminations_2.json</b>.<br><br>
+                        <small>Reason: Browser security restricts direct file fetching via <code>file://</code>.<br>
+                        <b>Fix:</b> Run a quick local server in your folder by typing <code>py -m http.server</code> in your terminal, then open <code>http://localhost:8000/nssf_viewer.html</code></small>
+                    </div>`;
+            }
+        }
+
+        function renderMessages(messages) {
+            const chatBody = document.getElementById('chatBody');
+            chatBody.innerHTML = '';
+
+            if (messages.length === 0) {
+                chatBody.innerHTML = `<div class="status-state">No matching termination notices found.</div>`;
+                return;
+            }
+
+            messages.forEach(msg => {
+                const bubble = document.createElement('div');
+                bubble.className = 'message-bubble';
+
+                const formattedDate = msg.date ? msg.date.replace('T', ' ') : 'Unknown Date';
+
+                bubble.innerHTML = `
+                    <div class="message-meta">
+                        <span class="badge">Terminated / Suspended</span>
+                        <span>📅 ${formattedDate}</span>
+                    </div>
+                    <div class="message-text">${escapeHtml(msg.text)}</div>
+                    <div class="message-footer">
+                        <a href="${msg.url}" target="_blank" class="tg-link">🔗 View on Telegram (${msg.id})</a>
+                    </div>
+                `;
+                chatBody.appendChild(bubble);
+            });
+        }
+
+        function filterMessages() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allMessages.filter(msg =>
+                msg.text.toLowerCase().includes(query) ||
+                msg.date.toLowerCase().includes(query) ||
+                msg.id.toString().includes(query)
+            );
+            renderMessages(filtered);
+        }
+
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/</g, "&lt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Initialize on load
+        loadTerminations();
+    </script>
+</body>
+</html>

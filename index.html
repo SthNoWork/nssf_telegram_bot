@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NSSF Facilities & Termination Map 🇰🇭</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Content:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', 'Content', sans-serif; background: #0e1621; color: #fff; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    header { background: #17212b; padding: 12px 18px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #232e3c; flex-wrap: wrap; gap: 10px; z-index: 1000; }
+    header h1 { font-size: 1.05rem; color: #2ea6ff; display: flex; align-items: center; gap: 8px; }
+    .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .search-input { background: #0e1621; border: 1px solid #232e3c; color: #fff; padding: 7px 12px; border-radius: 8px; font-size: 0.85rem; outline: none; width: 220px; }
+    .search-input:focus { border-color: #2ea6ff; }
+    .filter-btn { background: #0e1621; border: 1px solid #232e3c; color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; transition: 0.2s; }
+    .filter-btn.active { background: #2ea6ff; border-color: #2ea6ff; color: #fff; font-weight: 600; }
+    .badge { padding: 4px 10px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; }
+    .badge-active { background: rgba(46, 204, 113, 0.2); color: #2ecc71; border: 1px solid #2ecc71; }
+    .badge-term { background: rgba(231, 76, 60, 0.2); color: #e74c3c; border: 1px solid #e74c3c; }
+    #map { flex: 1; width: 100%; height: 100%; }
+    .custom-popup .leaflet-popup-content-wrapper { background: #17212b; color: #fff; border-radius: 10px; border: 1px solid #232e3c; }
+    .custom-popup .leaflet-popup-tip { background: #17212b; }
+    .popup-title { font-size: 0.98rem; font-weight: bold; margin-bottom: 5px; color: #2ea6ff; }
+    .popup-meta { font-size: 0.84rem; color: #a4b0be; line-height: 1.5; }
+    .term-box { background: rgba(231, 76, 60, 0.15); border: 1px solid #e74c3c; padding: 8px; border-radius: 6px; margin-top: 8px; font-size: 0.8rem; color: #ff6b6b; }
+    .term-box a { color: #2ea6ff; text-decoration: underline; }
+    .btn-nav { display: inline-block; margin-top: 8px; padding: 6px 12px; background: #2ea6ff; color: #fff; text-decoration: none; border-radius: 6px; font-size: 0.8rem; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🏥 NSSF Partner Facilities 🇰🇭</h1>
+    <div class="controls">
+      <input type="text" id="search" class="search-input" placeholder="🔍 Search clinic / district..." />
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="active">Active Only</button>
+      <button class="filter-btn" data-filter="term">Terminated Only</button>
+      <span class="badge badge-active" id="active-count">0 Active</span>
+      <span class="badge badge-term" id="term-count">0 Terminated</span>
+    </div>
+  </header>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script>
+    const map = L.map('map').setView([11.5564, 104.9282], 8);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    const greenIcon = new L.Icon({
+      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+
+    const redIcon = new L.Icon({
+      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+
+    const markersCluster = L.markerClusterGroup();
+    let allMarkers = [];
+    let currentFilter = 'all';
+
+    function checkTermination(nameKm, nameEn, terminations) {
+      const coreKm = nameKm.replace(/មន្ទីរពហុព្យាបាល|មន្ទីរសម្រាកព្យាបាល|មន្ទីរពេទ្យ/g, '').trim();
+      const coreEn = nameEn.replace(/Hospital|Clinic|Polyclinic|Referral/gi, '').trim();
+      for (const item of terminations) {
+        const text = item.text || '';
+        if (coreKm.length > 2 && text.includes(coreKm)) return item;
+        if (coreEn.length > 3 && text.toLowerCase().includes(coreEn.toLowerCase())) return item;
+      }
+      return null;
+    }
+
+    async function loadData() {
+      let geojson = null;
+      let terminations = [];
+
+      // Load terminations
+      try {
+        const termRes = await fetch('verified_terminations.json');
+        if (termRes.ok) terminations = await termRes.json();
+      } catch (e) {
+        console.warn('Could not load verified_terminations.json', e);
+      }
+
+      // Try loading geojson from paths
+      const paths = ['telegram_bot/data/nssf.geojson', 'data/nssf.geojson', 'telegram_bot/data/nssf.json'];
+      for (const p of paths) {
+        try {
+          const res = await fetch(p);
+          if (res.ok) {
+            geojson = await res.json();
+            break;
+          }
+        } catch (e) {}
+      }
+
+      if (!geojson || !geojson.features) {
+        alert('Could not load GeoJSON dataset. Please ensure nssf.geojson is available.');
+        return;
+      }
+
+      let activeCount = 0;
+      let termCount = 0;
+
+      geojson.features.forEach(f => {
+        const p = f.properties || {};
+        const lat = parseFloat(p.lat);
+        const lng = parseFloat(p.long || p.lng);
+        if (isNaN(lat) || isNaN(lng)) return;
+
+        const nameEn = p.name || p.name_en || 'NSSF Partner Facility';
+        const nameKm = p.name_km || nameEn;
+        const phone = (p.contact || p.ambulance || p.nssf_agency || p.phone || 'N/A').split('\n')[0].trim();
+        const district = p.district || 'N/A';
+        const province = p.province || 'Cambodia';
+
+        const termNotice = checkTermination(nameKm, nameEn, terminations);
+        const isTerm = termNotice !== null;
+
+        if (isTerm) termCount++; else activeCount++;
+
+        const icon = isTerm ? redIcon : greenIcon;
+        const marker = L.marker([lat, lng], { icon });
+
+        let termHtml = '';
+        if (isTerm) {
+          termHtml = `
+            <div class="term-box">
+              ⚠️ <strong>កិច្ចព្រមព្រៀងត្រូវបានបញ្ចប់/ផ្អាក!</strong><br>
+              ថ្ងៃទី៖ ${termNotice.date ? termNotice.date.substring(0, 10) : 'N/A'}<br>
+              ${termNotice.url ? `<a href="${termNotice.url}" target="_blank">🔗 មើលសេចក្តីជូនដំណឹងផ្លូវការ</a>` : ''}
+            </div>
+          `;
+        }
+
+        const popupContent = `
+          <div class="custom-popup">
+            <div class="popup-title">${nameKm}</div>
+            <div class="popup-meta">
+              <div><strong>EN:</strong> ${nameEn}</div>
+              <div><strong>📍 ទីតាំង៖</strong> ${district}, ${province}</div>
+              <div><strong>📞 ទូរស័ព្ទ៖</strong> ${phone}</div>
+              ${termHtml}
+              <a class="btn-nav" href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank">🗺 បើកមើលផ្លូវ (Google Maps)</a>
+            </div>
+          </div>
+        `;
+
+        marker.bindPopup(popupContent);
+        marker.featureData = {
+          nameKm,
+          nameEn,
+          district,
+          province,
+          isTerm,
+        };
+        allMarkers.push(marker);
+      });
+
+      document.getElementById('active-count').innerText = `${activeCount} Active`;
+      document.getElementById('term-count').innerText = `${termCount} Terminated`;
+      applyFilters();
+    }
+
+    function applyFilters() {
+      const q = document.getElementById('search').value.toLowerCase().trim();
+      markersCluster.clearLayers();
+
+      allMarkers.forEach(m => {
+        const d = m.featureData;
+        const matchesQuery = !q || (
+          d.nameKm.toLowerCase().includes(q) ||
+          d.nameEn.toLowerCase().includes(q) ||
+          d.district.toLowerCase().includes(q) ||
+          d.province.toLowerCase().includes(q)
+        );
+
+        let matchesStatus = true;
+        if (currentFilter === 'active') matchesStatus = !d.isTerm;
+        if (currentFilter === 'term') matchesStatus = d.isTerm;
+
+        if (matchesQuery && matchesStatus) {
+          markersCluster.addLayer(m);
+        }
+      });
+
+      if (!map.hasLayer(markersCluster)) {
+        map.addLayer(markersCluster);
+      }
+    }
+
+    document.getElementById('search').addEventListener('input', applyFilters);
+
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        currentFilter = e.target.dataset.filter;
+        applyFilters();
+      });
+    });
+
+    loadData();
+  </script>
+</body>
+</html>

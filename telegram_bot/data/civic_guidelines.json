@@ -1,0 +1,32 @@
+{
+  "issues": {
+    "chronic": {
+      "btn_km": "💊 ជំងឺរ៉ាំរ៉ៃ (ទឹកនោមផ្អែម/លើសឈាម)",
+      "btn_en": "💊 Chronic Illnesses (Diabetes/Hypertension)",
+      "text_km": "💊 **គោលការណ៍ព្យាបាលជំងឺរ៉ាំរ៉ៃ (Chronic Diseases)៖**\n• **កន្លែងព្យាបាល៖** ជំងឺរ៉ាំរ៉ៃ (ទឹកនោមផ្អែម, លើសសម្ពាធឈាម, ខ្សោយបេះដូង, ថ្លើម B/C, ក្រលៀន, មហារីក) ត្រូវបានធានារ៉ាប់រង **តែនៅមន្ទីរពេទ្យរដ្ឋ (Public Hospitals)** ប៉ុណ្ណោះ មិនធានានៅគ្លីនិកឯកជនឡើយ។\n• **ឱសថ៖** ប្រើប្រាស់បញ្ជីឱសថសារវន្តផ្លូវការរបស់រដ្ឋ។\n• **ការចំណាយ៖** ឥតគិតថ្លៃ ១០០% តាមលក្ខខណ្ឌ ប.ស.ស.។",
+      "text_en": "💊 **NSSF Policy on Chronic Diseases:**\n• **Authorized Facilities:** Chronic illnesses (diabetes, hypertension, heart failure, hepatitis B/C, kidney disease, cancer) are **ONLY covered at Public Hospitals (មន្ទីរពេទ្យរដ្ឋ)**, NOT at private partner clinics.\n• **Medications:** Covered using the national essential medicines list.\n• **Cost:** 100% free under valid NSSF entitlement.",
+      "keywords": ["ទឹកនោមផ្អែម", "លើសឈាម", "រ៉ាំរ៉ៃ", "ខ្សោយបេះដូង", "ថ្លើម", "ក្រលៀន", "មហារីក", "diabetes", "hypertension", "chronic", "cancer", "kidney", "hepatitis"]
+    },
+    "exclusions": {
+      "btn_km": "🦷 សេវាធ្មេញ & កែសម្ផស្ស (មិនធានា)",
+      "btn_en": "🦷 Dental & Cosmetic (Excluded)",
+      "text_km": "🦷 **សេវាដែល ប.ស.ស. មិនធានារ៉ាប់រង (Exclusions)៖**\n• ❌ **ធ្មេញ៖** ការលាងសម្អាតធ្មេញធម្មតា, ប៉ះធ្មេញ, ដកធ្មេញទូទៅ ឬដាំធ្មេញ (លើកលែងករណីគ្រោះថ្នាក់ការងារជាក់ស្តែង)។\n• ❌ **កែសម្ផស្ស៖** ការវះកាត់កែសម្ផស្ស ឬថែរក្សាសម្រស់។\n• ❌ **សេវាផ្សេងទៀត៖** ពិនិត្យសុខភាពទូទៅគ្មានរោគសញ្ញា, ព្យាបាលភាពគ្មានកូន (Fertility), វ៉ែនតា ឬអវយវៈសិប្បនិម្មិតក្រៅកញ្ចប់គ្រោះថ្នាក់ការងារ។",
+      "text_en": "🦷 **Services Excluded from NSSF Coverage:**\n• ❌ **Dental:** Routine teeth cleaning, fillings, extractions, or implants (unless directly resulting from a certified work injury).\n• ❌ **Cosmetic:** Elective aesthetic surgery or cosmetic dermatology.\n• ❌ **Other Exclusions:** General wellness checkups without symptoms, fertility treatments, eyeglasses, or prosthetics outside workplace injury plans.",
+      "keywords": ["ធ្មេញ", "ប៉ះធ្មេញ", "ដកធ្មេញ", "លាងធ្មេញ", "កែសម្ផស្ស", "វ៉ែនតា", "dental", "teeth", "cosmetic", "beauty", "aesthetic", "glasses", "checkup"]
+    },
+    "general_care": {
+      "btn_km": "🏥 ការសម្រាកព្យាបាល & សង្គ្រោះ",
+      "btn_en": "🏥 Inpatient/Outpatient Care",
+      "text_km": "🏥 **ការពិនិត្យ ពិគ្រោះ និងសម្រាកព្យាបាល៖**\n• **កន្លែងទទួលសេវា៖** មូលដ្ឋានសុខាភិបាលដៃគូ ប.ស.ស. ទាំងរដ្ឋ និងឯកជនទូទាំងប្រទេស។\n• **ឯកសារតម្រូវ៖** ប័ណ្ណសមាជិក ប.ស.ស. (ឬ App NSSF) + អត្តសញ្ញាណប័ណ្ណសញ្ជាតិខ្មែរច្បាប់ដើម។\n• **សង្គ្រោះបន្ទាន់៖** ករណីបន្ទាន់អាចចូលពេទ្យដែលនៅជិតបំផុតទោះមិនមែនដៃគូ រួចទូរស័ព្ទមកលេខ `1286` ដើម្បីស្នើសុំទូទាត់សងវិញ។\n• **ការហាមឃាត់៖** ហាមទុកប័ណ្ណ ប.ស.ស. នៅពេទ្យពេលចេញពីពេទ្យដាច់ខាត!",
+      "text_en": "🏥 **General Consultations & Inpatient Treatment:**\n• **Coverage:** 100% free outpatient and inpatient care at certified public and private partner facilities across Cambodia.\n• **Required Documents:** Original NSSF Card (or NSSF Member App) + original Cambodian National ID card.\n• **Emergency:** Access the nearest hospital immediately (even non-partner); call `1286` for reimbursement claims.\n• **Warning:** Never leave your NSSF card behind at the hospital upon discharge!",
+      "keywords": ["ពិនិត្យ", "សម្រាកពេទ្យ", "ដេកពេទ្យ", "consultation", "inpatient", "outpatient", "treatment", "doctor"]
+    },
+    "maternity": {
+      "btn_km": "🤰 ប្រាក់បំណាច់ & ឧបត្ថម្ភមាតុភាព",
+      "btn_en": "🤰 Maternity Cash Benefits",
+      "text_km": "🤰 **អត្ថប្រយោជន៍ពេលសម្រាលកូន (Maternity Benefits)៖**\n• **ប្រាក់ឧបត្ថម្ភរាជរដ្ឋាភិបាល៖** កូន១ ទទួលបាន ៤០ម៉ឺនរៀល | កូនភ្លោះពីរ ៨០ម៉ឺនរៀល | កូនភ្លោះបី ១២០ម៉ឺនរៀល (បូកបន្ថែម ៥លានរៀលពីសម្តេច)។\n• **កម្មការិនីឯកជន (បង់បាន ៩ខែក្នុង ១២ខែចុងក្រោយ)៖** ទទួលបានប្រាក់បំណាច់ ៧០% នៃប្រាក់ឈ្នួលរយៈពេល ៩០ថ្ងៃ។\n• **ស្ត្រីស្វ័យនិយោជន៍៖** ទទួលបានប្រាក់បំណាច់មាតុភាព ១,២៦០,០០០ រៀល។\n• **ការបំពេញបែបបទ៖** មុនសម្រាលយ៉ាងយូរ ៣ខែ ឬក្រោយសម្រាលយ៉ាងយូរ ១ខែ។",
+      "text_en": "🤰 **Maternity Cash Allowances & Benefits:**\n• **Government Cash Bonus:** 400,000 KHR for 1 child | 800,000 KHR for twins | 1,200,000 KHR for triplets (+ 5,000,000 KHR special grant).\n• **Private Sector Workers (9 months contributed within last 12 months):** 70% daily wage allowance for 90 days.\n• **Self-Employed Women:** Direct cash maternity benefit of 1,260,000 KHR.\n• **Registration Window:** Within 3 months before delivery or up to 1 month after delivery.",
+      "keywords": ["សម្រាលកូន", "មាតុភាព", "កូនភ្លោះ", "មានផ្ទៃពោះ", "ឆ្លងទន្លេ", "maternity", "pregnant", "pregnancy", "childbirth", "baby", "delivery"]
+    }
+  }
+}
