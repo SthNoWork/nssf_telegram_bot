@@ -51,11 +51,11 @@ def get_openrouter_candidate_models() -> list[str]:
             if m and m not in models:
                 models.append(m)
     defaults = [
-        "google/gemini-2.0-flash-001",
         "meta-llama/llama-3.3-70b-instruct",
         "deepseek/deepseek-chat",
         "mistralai/mistral-small-24b-instruct-2501",
         "qwen/qwen-2.5-72b-instruct",
+        "google/gemini-2.0-flash-lite-001",
         "openrouter/auto",
     ]
     for d in defaults:
@@ -79,8 +79,9 @@ def call_openrouter_sync(system_prompt: str, user_text: str) -> str | None:
     }
     candidate_models = get_openrouter_candidate_models()
 
-    # 1. First attempt: OpenRouter native server-side fallback array
+    # 1. First attempt: OpenRouter native server-side fallback array (requires primary model + models list)
     payload = {
+        "model": candidate_models[0],
         "models": candidate_models,
         "messages": [
             {"role": "system", "content": system_prompt},
@@ -1017,6 +1018,21 @@ async def post_init(application: Application):
         print(f"Warning: Could not set bot commands: {e}")
 
 
+async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    """Handles transient network errors cleanly without flooding the console."""
+    err = context.error
+    if not err:
+        return
+    err_str = str(err)
+    if "getaddrinfo failed" in err_str or "ConnectError" in err_str or "NetworkError" in err_str:
+        print("⚠️ Transient network/DNS interruption (Telegram API unreachable). Reconnecting...")
+        return
+    if "Conflict" in err_str or "terminated by other getUpdates" in err_str:
+        print("⚠️ Multiple bot instances detected with the same token.")
+        return
+    print(f"⚠️ Telegram error: {err}")
+
+
 def main():
     if not TELEGRAM_BOT_TOKEN:
         print("❌ Error: Set TELEGRAM_BOT_TOKEN in your .env file first!")
@@ -1039,6 +1055,7 @@ def main():
         .build()
     )
 
+    app.add_error_handler(global_error_handler)
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("language", language_command))
     app.add_handler(CommandHandler("map", map_command))
